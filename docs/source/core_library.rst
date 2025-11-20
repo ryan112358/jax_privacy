@@ -10,10 +10,16 @@ Public API
 .. autosummary::
   :toctree: _autosummary_output
   :nosignatures:
+  :template: autosummary/module_summary.rst
 
   batch_selection
-  clipped_grad
   noise_addition
+
+.. autosummary::
+  :toctree: _autosummary_output
+  :nosignatures:
+
+  clipped_grad
 
 
 Experimental Modules
