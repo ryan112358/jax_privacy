@@ -10,17 +10,16 @@ Public API
 .. autosummary::
   :toctree: _autosummary_output
   :nosignatures:
+  :template: autosummary/module_summary.rst
 
-  batch_selection.BallsInBinsSampling
-  batch_selection.BatchSelectionStrategy
-  batch_selection.CyclicPoissonSampling
-  batch_selection.UserSelectionStrategy
-  batch_selection.pad_to_multiple_of
-  batch_selection.split_and_pad_global_batch
+  batch_selection
+  noise_addition
+
+.. autosummary::
+  :toctree: _autosummary_output
+  :nosignatures:
+
   clipped_grad
-  noise_addition.SupportedStrategies
-  noise_addition.gaussian_privatizer
-  noise_addition.matrix_factorization_privatizer
 
 
 Experimental Modules
