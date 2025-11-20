@@ -10,16 +10,11 @@ Public API
 .. autosummary::
   :toctree: _autosummary_output
   :nosignatures:
-  :template: autosummary/module_summary.rst
+  :recursive:
 
   batch_selection
-  noise_addition
-
-.. autosummary::
-  :toctree: _autosummary_output
-  :nosignatures:
-
   clipped_grad
+  noise_addition
 
 
 Experimental Modules
