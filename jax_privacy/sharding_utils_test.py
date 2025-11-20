@@ -17,7 +17,7 @@ from absl.testing import absltest
 import chex
 import jax
 import jax.numpy as jnp
-from jax_privacy.noise_addition import sharding_utils
+from jax_privacy import sharding_utils
 import numpy as np
 
 

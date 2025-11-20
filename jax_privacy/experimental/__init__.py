@@ -15,4 +15,4 @@
 
 """Experimental JAX Privacy APIs and Implementations."""
 # pylint: disable=g-importing-member
-from jax_privacy.experimental.clipping import clipped_grad
+

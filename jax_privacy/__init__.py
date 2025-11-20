@@ -24,7 +24,7 @@ from jax_privacy import noise_addition
 
 # pylint: disable=g-importing-member
 # Carefully selected member imports for the top-level public API.
-from jax_privacy.experimental import batch_selection
-from jax_privacy.experimental import clipped_grad
+from jax_privacy import batch_selection
+from jax_privacy.experimental.clipping import clipped_grad
 
 __version__ = '1.0.1'

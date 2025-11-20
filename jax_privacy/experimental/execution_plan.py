@@ -51,10 +51,10 @@ import math
 
 import dp_accounting
 import jax.numpy as jnp
-from jax_privacy.experimental import batch_selection
+from jax_privacy import batch_selection
 from jax_privacy.experimental import clipping
 from jax_privacy.matrix_factorization import toeplitz
-from jax_privacy.noise_addition import additive_privatizers
+from jax_privacy import noise_addition
 import optax
 import pydantic
 
@@ -281,7 +281,7 @@ class BandMFExecutionPlanConfig:
     max_column_norm = jnp.linalg.norm(mf_strategy)
     noising_matrix = toeplitz.inverse_as_streaming_matrix(mf_strategy)
 
-    privatizer = additive_privatizers.matrix_factorization_privatizer(
+    privatizer = noise_addition.matrix_factorization_privatizer(
         noising_matrix,
         stddev=float(noise_multiplier * query_sensitivity * max_column_norm),
         prng_key=self.noise_seed,

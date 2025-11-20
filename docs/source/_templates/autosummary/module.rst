@@ -4,13 +4,14 @@
 
 .. automodule:: {{ fullname }}
    :no-members:
-   :no-index:
+
+
+.. rubric:: Public API
 
 {% if classes %}
 Classes
 -------
 .. autosummary::
-   :toctree:
    :nosignatures:
 
    {% for item in classes %}
@@ -22,7 +23,6 @@ Classes
 Functions
 ---------
 .. autosummary::
-   :toctree:
    :nosignatures:
 
    {% for item in functions %}
@@ -30,26 +30,20 @@ Functions
    {% endfor %}
 {% endif %}
 
-{% if exceptions %}
-Exceptions
-----------
-.. autosummary::
-   :toctree:
-   :nosignatures:
+Reference
+---------
 
-   {% for item in exceptions %}
-   {{ item }}
-   {% endfor %}
+{% if classes %}
+{% for item in classes %}
+.. autoclass:: {{ item }}
+   :members:
+   :undoc-members:
+   :show-inheritance:
+{% endfor %}
 {% endif %}
 
-{% if attributes %}
-Attributes
-----------
-.. autosummary::
-   :toctree:
-   :nosignatures:
-
-   {% for item in attributes %}
-   {{ item }}
-   {% endfor %}
+{% if functions %}
+{% for item in functions %}
+.. autofunction:: {{ item }}
+{% endfor %}
 {% endif %}
