@@ -11,9 +11,10 @@ Public API
   :toctree: _autosummary_output
   :nosignatures:
 
+  clipping
   batch_selection
-  clipped_grad
   noise_addition
+  auditing
 
 
 Experimental Modules
