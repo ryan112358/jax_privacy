@@ -62,11 +62,9 @@ class BoundedSensitivityCallable:
     The L2 sensitivity is defined with respect to the given neighboring relation
     and the unit of privacy implied by the function that created this instance.
 
-    Args:
-      neighboring_relation: The neighboring relation to consider.
+    :param neighboring_relation: The neighboring relation to consider.
 
-    Returns:
-      The L2 sensitivity of the Callable.
+    :return: The L2 sensitivity of the Callable.
     """
     match neighboring_relation:
       case dp_accounting.NeighboringRelation.ADD_OR_REMOVE_ONE:
@@ -103,34 +101,30 @@ def clip_pytree(
 
   Edge Case Handling:
 
-  ======================= ==================== =================================
-  Case                    rescale_to_unit_norm Output
-  ======================= ==================== =================================
-  clip_norm = 0           False                Zero
-  clip_norm = 0           True                 Input / norm (limit as clip_norm -> 0)  # pylint: disable=line-too-long
-  clip_norm = inf         False                Unchanged
-  clip_norm = inf         True                 Zero
-  clip_norm < 0 (static)  -                    Raises ValueError
-  clip_norm < 0 (dynamic) -                    Zero
-  pytree_norm = 0         -                    Unchanged
-  ======================= ==================== =================================
+  | Case                    | rescale_to_unit_norm | Output                                 |
+  | :---------------------- | :------------------- | :------------------------------------- |
+  | clip_norm = 0           | False                | Zero                                   |
+  | clip_norm = 0           | True                 | Input / norm (limit as clip_norm -> 0) |
+  | clip_norm = inf         | False                | Unchanged                              |
+  | clip_norm = inf         | True                 | Zero                                   |
+  | clip_norm < 0 (static)  | -                    | Raises ValueError                      |
+  | clip_norm < 0 (dynamic) | -                    | Zero                                   |
+  | pytree_norm = 0         | -                    | Unchanged                              |
 
-  Args:
-    pytree: The PyTree of arrays to clip.
-    clip_norm: The maximum L2 norm allowed.
-    rescale_to_unit_norm: If True, the output PyTree's norm is rescaled by `1.0
-      / clip_norm` after potential clipping. If False, the output PyTree has
-      norm at most `clip_norm`.
-    nan_safe: If True, NaNs and +/- infs are converted to 0 before clipping.
-      Must be True to preserve the formal guarantees in the presence of NaNs,
-      although it does require potentially additional computation. If False, the
-      NaNs in input PyTree will be preserved in the output PyTree. +/- infs will
-      be converted to NaNs as well.
-    return_zero: If True, the output PyTree is guaranteed to be zero no matter
-      what the inputs are. Does not influence the formal guarantees.
+  :param pytree: The PyTree of arrays to clip.
+  :param clip_norm: The maximum L2 norm allowed.
+  :param rescale_to_unit_norm: If True, the output PyTree's norm is rescaled by `1.0
+    / clip_norm` after potential clipping. If False, the output PyTree has
+    norm at most `clip_norm`.
+  :param nan_safe: If True, NaNs and +/- infs are converted to 0 before clipping.
+    Must be True to preserve the formal guarantees in the presence of NaNs,
+    although it does require potentially additional computation. If False, the
+    NaNs in input PyTree will be preserved in the output PyTree. +/- infs will
+    be converted to NaNs as well.
+  :param return_zero: If True, the output PyTree is guaranteed to be zero no matter
+    what the inputs are. Does not influence the formal guarantees.
 
-  Returns:
-    A tuple `(clipped_pytree, original_l2_norm)`, where `clipped_pytree` is the
+  :return: A tuple `(clipped_pytree, original_l2_norm)`, where `clipped_pytree` is the
     processed PyTree and `original_l2_norm` is the L2 norm of the input PyTree.
   """
   if isinstance(clip_norm, numbers.Real) and clip_norm < 0:
@@ -236,43 +230,42 @@ def clipped_fun(
       these as desired (possibly with a DP mean, median, quantile, or histogram
       mechanism).
 
-  Args:
-    fun: The function to be clipped.
-    has_aux: If True, `fun` is expected to return a tuple `(value, aux)`. Only
-      the value will be clipped + aggregated, `aux` will be returned on a
-      per-example basis. Exercise caution when using this as the sensitivity
-      guarantees of the returned Callable are only provided w.r.t. `value`.
-    batch_argnums: Specifies which argument(s) of `fun` contain the batch
-      dimension. All arguments specified here must have the same size along the
-      0th axis.
-    keep_batch_dim: If True, batch inputs will be passed to `fun` with a leading
-      batch axis of size 1.  If False, this size 1 axis will be dropped
-      (reducing the rank of the batch args by 1 before passing to `fun`).
-    l2_clip_norm: The maximum L2 norm allowed.
-    rescale_to_unit_norm: If True, the output PyTree's norm is rescaled by `1.0
-      / clip_norm` after potential clipping. If False, the output PyTree has
-      norm at most `clip_norm`.
-    normalize_by: Divide the clipped output by this value before returning.
-    return_norms: If True, the returned Callable will return the l2_norms of the
-      per-example values before clipping. These values should be handled with
-      care, see the formal guarantees above.
-    microbatch_size: If set, the batch is split up into microbatches of this
-      size. These microbatches are then processed sequentially, with operations
-      on the groups within each microbatch being vectorized using `vmap`. This
-      can be used to reduce peak memory usage at the cost of increased
-      sequential computation.
-    nan_safe: If True, the formal guarantees of the returned Callable still
-      holds in the presence of NaNs and infs. See `clip_pytree` for more details
-      on this argument.
-    dtype: Optional dtype for the clipped+aggregated pytree. If None, the dtype
-      will be the same as the dtypes of the function output. Can be useful to
-      avoid overflow issues when using low-precision dtypes as the transformed
-      function computes a sum over a potentially large batch.
-    prng_argnum: If set, specifies which argument of `fun` is a prng key. The
-      prng will be split to have a batch dimension and vmapped over.
-    spmd_axis_name: See jax.vmap.
+  :param fun: The function to be clipped.
+  :param has_aux: If True, `fun` is expected to return a tuple `(value, aux)`. Only
+    the value will be clipped + aggregated, `aux` will be returned on a
+    per-example basis. Exercise caution when using this as the sensitivity
+    guarantees of the returned Callable are only provided w.r.t. `value`.
+  :param batch_argnums: Specifies which argument(s) of `fun` contain the batch
+    dimension. All arguments specified here must have the same size along the
+    0th axis.
+  :param keep_batch_dim: If True, batch inputs will be passed to `fun` with a leading
+    batch axis of size 1.  If False, this size 1 axis will be dropped
+    (reducing the rank of the batch args by 1 before passing to `fun`).
+  :param l2_clip_norm: The maximum L2 norm allowed.
+  :param rescale_to_unit_norm: If True, the output PyTree's norm is rescaled by `1.0
+    / clip_norm` after potential clipping. If False, the output PyTree has
+    norm at most `clip_norm`.
+  :param normalize_by: Divide the clipped output by this value before returning.
+  :param return_norms: If True, the returned Callable will return the l2_norms of the
+    per-example values before clipping. These values should be handled with
+    care, see the formal guarantees above.
+  :param microbatch_size: If set, the batch is split up into microbatches of this
+    size. These microbatches are then processed sequentially, with operations
+    on the groups within each microbatch being vectorized using `vmap`. This
+    can be used to reduce peak memory usage at the cost of increased
+    sequential computation.
+  :param nan_safe: If True, the formal guarantees of the returned Callable still
+    holds in the presence of NaNs and infs. See `clip_pytree` for more details
+    on this argument.
+  :param dtype: Optional dtype for the clipped+aggregated pytree. If None, the dtype
+    will be the same as the dtypes of the function output. Can be useful to
+    avoid overflow issues when using low-precision dtypes as the transformed
+    function computes a sum over a potentially large batch.
+  :param prng_argnum: If set, specifies which argument of `fun` is a prng key. The
+    prng will be split to have a batch dimension and vmapped over.
+  :param spmd_axis_name: See jax.vmap.
 
-  Returns:
+  :return:
     A new function `clip_fn` that clips the output of `fun` and sums across
     the batch. `clip_fn` takes the same arguments as `fun`. The exact output
     signature depends on `has_aux` and `return_norms`:
@@ -448,68 +441,67 @@ def clipped_grad(
       these as desired (possibly with a DP mean, median, quantile, or histogram
       mechanism).
 
-  Args:
-    fun: The function to be differentiated, which should return a scalar loss
-      value. If `has_aux` is True, it should return a tuple `(value, aux)`.
-    argnums: Specifies which argument(s) of `fun` to differentiate with respect
-      to. Can be an integer or a sequence of integers. These arguments should
-      *not* have a batch dimension.
-    has_aux: If True, `fun` is expected to return a tuple `(value, aux)`. The
-      auxiliary data `aux` will be returned by the transformed function.
-      Exercise caution when using this as no DP sensitivity guarantees are
-      provided for the auxiliary data.
-    l2_clip_norm: The maximum L2 norm for each per-example gradient. Gradients
-      with a norm larger than this value will be scaled down.
-    rescale_to_unit_norm: If True, clipped gradients are rescaled by `1.0 /
-      l2_clip_norm`. This ensures the sensitivity is 1.0. If False, they are
-      only scaled down if their norm exceeds `l2_clip_norm`, resulting in a
-      sensitivity of `l2_clip_norm`. The motivation for setting this to True is
-      to decouple the clipping norm from the learning rate for non-adaptive
-      optimizers, as described in https://arxiv.org/abs/2204.13650.
-    normalize_by: Divide the clipped output by this value before returning.
-    batch_argnums: Specifies which argument(s) of `fun` contain the batch
-      dimension (usually the data and labels). Can be an integer or a sequence
-      of integers. All arguments specified here must have the same size along
-      their first dimension (the batch dimension) the default value of 1 assumes
-      the signature of fun is `fun(params, batch)`.
-    keep_batch_dim: If True, batch inputs will be passed to `fun` with a leading
-      batch axis of size 1.  If False, this size 1 axis will be dropped
-      (reducing the rank of the batch args by 1 before passing to `fun`). The
-      default value of True assumes that `fun` expects inputs with a batch axis.
-      Overriding this default can be useful if fun defines the loss function for
-      a single example, or if clipping should be applied at the group or user
-      level (in which case an extra batch axis is added to the inputs).
-    return_values: If True, the transformed function will also return the
-      per-example values, before clipping.
-    return_grad_norms: If True, the transformed function will also return the
-      per-example gradient norms, before clipping.
-    pre_clipping_transform: An optional function to apply to the per-example
-      gradients before clipping. The function should consume the gradient pytree
-      for a single example and returned a new pytree (possibly with different
-      structure). Can be used to e.g., scale the leaves of the pytree to
-      accommodate preconditioner clipping. Does not affect the sensitivity
-      guarantee.
-    microbatch_size: If set, input groups are formed into microbatches of this
-      size. These microbatches are then processed sequentially, with operations
-      on the groups within each microbatch being vectorized using `vmap`. This
-      can be used to reduce peak memory usage at the cost of increased
-      sequential computation. Microbatching will be at the level of
-      users/groups.  E.g., if there are 500 users, with 7 examples per user, and
-      microbatch_size=100, then the input will be broken into 5 microbatches of
-      100 users, and when processing a microbatch, `fun` will be invoked 100
-      times (in parallel with vmap) on groups of 7 examples.
-    nan_safe: If True, the formal guarantees of the returned Callable still
-      holds in the presence of NaNs and infs. See `clip_pytree` for more details
-      on this argument.
-    dtype: Optional dtype for the returned gradient. If None, the dtype will be
-      the same as the dtypes of the gradient function. Can be useful to avoid
-      overflow issues when using low-precision dtypes as the returned function
-      computes a sum over a potentially large batch.
-    prng_argnum: If set, specifies which argumnet of `fun` is a prng key. The
-      prng will be split to have a batch dimension and vmapped over.
-    spmd_axis_name: See jax.vmap. Only relevant in distributed settings.
+  :param fun: The function to be differentiated, which should return a scalar loss
+    value. If `has_aux` is True, it should return a tuple `(value, aux)`.
+  :param argnums: Specifies which argument(s) of `fun` to differentiate with respect
+    to. Can be an integer or a sequence of integers. These arguments should
+    *not* have a batch dimension.
+  :param has_aux: If True, `fun` is expected to return a tuple `(value, aux)`. The
+    auxiliary data `aux` will be returned by the transformed function.
+    Exercise caution when using this as no DP sensitivity guarantees are
+    provided for the auxiliary data.
+  :param l2_clip_norm: The maximum L2 norm for each per-example gradient. Gradients
+    with a norm larger than this value will be scaled down.
+  :param rescale_to_unit_norm: If True, clipped gradients are rescaled by `1.0 /
+    l2_clip_norm`. This ensures the sensitivity is 1.0. If False, they are
+    only scaled down if their norm exceeds `l2_clip_norm`, resulting in a
+    sensitivity of `l2_clip_norm`. The motivation for setting this to True is
+    to decouple the clipping norm from the learning rate for non-adaptive
+    optimizers, as described in https://arxiv.org/abs/2204.13650.
+  :param normalize_by: Divide the clipped output by this value before returning.
+  :param batch_argnums: Specifies which argument(s) of `fun` contain the batch
+    dimension (usually the data and labels). Can be an integer or a sequence
+    of integers. All arguments specified here must have the same size along
+    their first dimension (the batch dimension) the default value of 1 assumes
+    the signature of fun is `fun(params, batch)`.
+  :param keep_batch_dim: If True, batch inputs will be passed to `fun` with a leading
+    batch axis of size 1.  If False, this size 1 axis will be dropped
+    (reducing the rank of the batch args by 1 before passing to `fun`). The
+    default value of True assumes that `fun` expects inputs with a batch axis.
+    Overriding this default can be useful if fun defines the loss function for
+    a single example, or if clipping should be applied at the group or user
+    level (in which case an extra batch axis is added to the inputs).
+  :param return_values: If True, the transformed function will also return the
+    per-example values, before clipping.
+  :param return_grad_norms: If True, the transformed function will also return the
+    per-example gradient norms, before clipping.
+  :param pre_clipping_transform: An optional function to apply to the per-example
+    gradients before clipping. The function should consume the gradient pytree
+    for a single example and returned a new pytree (possibly with different
+    structure). Can be used to e.g., scale the leaves of the pytree to
+    accommodate preconditioner clipping. Does not affect the sensitivity
+    guarantee.
+  :param microbatch_size: If set, input groups are formed into microbatches of this
+    size. These microbatches are then processed sequentially, with operations
+    on the groups within each microbatch being vectorized using `vmap`. This
+    can be used to reduce peak memory usage at the cost of increased
+    sequential computation. Microbatching will be at the level of
+    users/groups.  E.g., if there are 500 users, with 7 examples per user, and
+    microbatch_size=100, then the input will be broken into 5 microbatches of
+    100 users, and when processing a microbatch, `fun` will be invoked 100
+    times (in parallel with vmap) on groups of 7 examples.
+  :param nan_safe: If True, the formal guarantees of the returned Callable still
+    holds in the presence of NaNs and infs. See `clip_pytree` for more details
+    on this argument.
+  :param dtype: Optional dtype for the returned gradient. If None, the dtype will be
+    the same as the dtypes of the gradient function. Can be useful to avoid
+    overflow issues when using low-precision dtypes as the returned function
+    computes a sum over a potentially large batch.
+  :param prng_argnum: If set, specifies which argumnet of `fun` is a prng key. The
+    prng will be split to have a batch dimension and vmapped over.
+  :param spmd_axis_name: See jax.vmap. Only relevant in distributed settings.
 
-  Returns:
+  :return:
     A new function `values_and_clipped_grad_fn` that computes the sum of clipped
     per-group gradients of `fun`. The returned function returns `grad`
     if return_values = return_grad_norms = has_aux = False.  Otherwise, it
