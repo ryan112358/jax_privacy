@@ -13,6 +13,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Public API for matrix factorization."""
+"""Public API for matrix factorization.
+
+.. autosummary::
+   :toctree: .
+
+   dense
+   banded
+   toeplitz
+   buffered_toeplitz
+   streaming_matrix
+"""
 
 from .streaming_matrix import StreamingMatrix
+from . import banded
+from . import buffered_toeplitz
+from . import dense
+from . import streaming_matrix
+from . import toeplitz
+
+__all__ = [
+    'StreamingMatrix',
+    'banded',
+    'buffered_toeplitz',
+    'dense',
+    'streaming_matrix',
+    'toeplitz',
+]
