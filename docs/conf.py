@@ -55,7 +55,7 @@ release = '1.1.0'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    'sphinx.ext.autodoc',
+    'autodoc2',
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
@@ -67,11 +67,12 @@ extensions = [
     'sphinx_autodoc_typehints',
 ]
 
-autodoc_type_aliases = {
-    'ArrayLike': 'jax.typing.ArrayLike',
-    'ArrayTree': 'chex.ArrayTree',
-    'PydanticDataclass': 'pydantic.PydanticDataclass',
-}
+autodoc2_packages = [
+    {
+        'path': '../jax_privacy',
+    },
+]
+autodoc2_render_plugin = 'myst'
 
 autosummary_generate = True
 
