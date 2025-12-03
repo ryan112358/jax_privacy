@@ -103,17 +103,15 @@ def clip_pytree(
 
   Edge Case Handling:
 
-  ======================= ==================== =================================
-  Case                    rescale_to_unit_norm Output
-  ======================= ==================== =================================
-  clip_norm = 0           False                Zero
-  clip_norm = 0           True                 Input / norm (limit as clip_norm -> 0)  # pylint: disable=line-too-long
-  clip_norm = inf         False                Unchanged
-  clip_norm = inf         True                 Zero
-  clip_norm < 0 (static)  -                    Raises ValueError
-  clip_norm < 0 (dynamic) -                    Zero
-  pytree_norm = 0         -                    Unchanged
-  ======================= ==================== =================================
+  | Case                    | rescale_to_unit_norm | Output                                 |
+  | :---------------------- | :------------------- | :------------------------------------- |
+  | clip_norm = 0           | False                | Zero                                   |
+  | clip_norm = 0           | True                 | Input / norm (limit as clip_norm -> 0) |
+  | clip_norm = inf         | False                | Unchanged                              |
+  | clip_norm = inf         | True                 | Zero                                   |
+  | clip_norm < 0 (static)  | -                    | Raises ValueError                      |
+  | clip_norm < 0 (dynamic) | -                    | Zero                                   |
+  | pytree_norm = 0         | -                    | Unchanged                              |
 
   Args:
     pytree: The PyTree of arrays to clip.
