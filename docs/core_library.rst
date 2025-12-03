@@ -15,6 +15,7 @@ Public API
   clipping
   noise_addition
   auditing
+  matrix_factorization
 
 
 Experimental Modules
