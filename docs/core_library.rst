@@ -7,30 +7,30 @@ Core Library
 
 Public API
 ----------
-.. autosummary::
-  :toctree: _autosummary_output
-  :nosignatures:
 
-  batch_selection
-  clipping
-  noise_addition
-  auditing
+.. toctree::
+   :maxdepth: 1
+
+   api/jax_privacy/jax_privacy.batch_selection
+   api/jax_privacy/jax_privacy.clipping
+   api/jax_privacy/jax_privacy.noise_addition
+   api/jax_privacy/jax_privacy.auditing
 
 
 Experimental Modules
 --------------------
-.. autosummary::
-  :toctree: _autosummary_output
-  :nosignatures:
 
-  experimental.execution_plan
-  experimental.compilation_utils
+.. toctree::
+   :maxdepth: 1
+
+   api/jax_privacy/jax_privacy.experimental.execution_plan
+   api/jax_privacy/jax_privacy.experimental.compilation_utils
 
 
 Other References
 ----------------
-.. autosummary::
-  :toctree: _autosummary_output
-  :nosignatures:
 
-  experimental.microbatching
+.. toctree::
+   :maxdepth: 1
+
+   api/jax_privacy/jax_privacy.experimental.microbatching
