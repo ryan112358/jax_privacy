@@ -63,7 +63,6 @@ extensions = [
     'myst_nb',
     'sphinx_collections',
     'sphinx.ext.doctest',
-    'sphinx_autodoc_typehints',
 ]
 
 autodoc_type_aliases = {
@@ -85,9 +84,7 @@ autodoc2_hidden_objects = ["private", "inherited", "dunder"]
 autodoc2_index_template = None
 
 # Configure autodoc settings
-autodoc_typehints = 'signature'
 autoclass_content = 'both'
-autodoc_member_order = 'bysource'
 napoleon_use_ivar = True
 
 templates_path = ['_templates']
