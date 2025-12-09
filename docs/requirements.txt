@@ -6,3 +6,4 @@ ipykernel
 sphinx_autodoc_typehints
 tensorflow
 keras
+sphinx-autodoc2
