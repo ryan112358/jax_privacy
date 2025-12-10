@@ -90,6 +90,7 @@ def split_and_pad_global_batch(
   >>> indices = np.arange(10)
   >>> split_and_pad_global_batch(indices, minibatch_size=4)
   [array([0, 1, 2, 3]), array([4, 5, 6, 7]), array([ 8,  9, -1, -1])]
+
   ```
 
   Args:
@@ -128,6 +129,7 @@ def pad_to_multiple_of(indices: np.ndarray, multiple: int) -> np.ndarray:
   >>> indices = np.arange(10)
   >>> pad_to_multiple_of(indices, multiple=4)
   array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, -1, -1])
+
   ```
 
   Args:
@@ -182,6 +184,7 @@ class CyclicPoissonSampling(BatchSelectionStrategy):
   >>> b = CyclicPoissonSampling(sampling_prob=1, iterations=8, cycle_length=4)
   >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
   [9 2 7] [ 4  5 11] [0 3 6] [10  8  1] [9 2 7] [ 4  5 11] [0 3 6] [10  8  1]
+
   ```
 
   Example Usage (standard Poisson sampling) [2]:
@@ -190,6 +193,7 @@ class CyclicPoissonSampling(BatchSelectionStrategy):
   >>> b = CyclicPoissonSampling(sampling_prob=0.25, iterations=8)
   >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
   [5 6 7] [5 8 3 7 2] [ 1  5 11] [0 3] [ 5  1  3  4 10] [2] [4 5 1 3] [6]
+
   ```
 
   Example Usage (BandMF-style sampling) [3]:
@@ -199,6 +203,7 @@ class CyclicPoissonSampling(BatchSelectionStrategy):
   >>> b = CyclicPoissonSampling(sampling_prob=p, iterations=6, cycle_length=2)
   >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
   [2 4] [1 8 9] [2 7 5 4] [11  1  3] [10  2  5  0  4] [ 1 11  6]
+
   ```
 
   References:
@@ -334,6 +339,7 @@ class UserSelectionStrategy:
   [[5 5]
    [2 0]
    [3 4]]
+
   ```
 
   Attributes:

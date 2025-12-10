@@ -35,6 +35,7 @@ Example Usage:
 ...   noisy_grad, noise_state = privatizer.update(
 ...     sum_of_clipped_grads=grad, noise_state=noise_state
 ...   )
+
 ```
 
 More powerful privatizers, like those based on matrix factorization have

@@ -223,6 +223,7 @@ def clipped_fun(
   >>> clipped_mean = clipped_fun(jnp.mean, l2_clip_norm=1.0)
   >>> clipped_mean(data)
   Array(5., dtype=float32)
+
   ```
 
   Formal Guarantees:
@@ -419,6 +420,7 @@ def clipped_grad(
   >>> g = clipped_grad(f, l2_clip_norm=jnp.inf)
   >>> g(3.0, jnp.array([0, 7, -2]))
   Array(4., dtype=float32)
+
   ```
 
   Example Usage (with Auxiliary Output):
@@ -432,6 +434,7 @@ def clipped_grad(
   Array([ 4.5,  8. , 12.5], dtype=float32)
   >>> aux.grad_norms
   Array([3., 4., 5.], dtype=float32)
+
   ```
 
   Example Usage (with Per-User Clipping):
@@ -444,6 +447,7 @@ def clipped_grad(
   >>> userC = jnp.array([0, 3])
   >>> g(3.0, jnp.array([userA, userB, userC]))
   Array(5.5, dtype=float32)
+
   ```
 
   Formal Guarantees:
