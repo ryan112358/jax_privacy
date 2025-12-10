@@ -13,55 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Library for computing sensitivity under multiple participations."""
+"""Utilities for computing sensitivity of matrix factorization mechanism."""
 
 import functools
 from typing import Optional
 
 import jax
-import jax.numpy as jnp
-from . import checks
+from jax import numpy as jnp
 
-# Disabling pylint invalid-name to allow mathematical notation including
-# single-capital-letter variables for matrices.
-# See README.md for notation conventions.
-# pylint:disable=invalid-name
-
-
-def single_participation_sensitivity(C: jnp.ndarray) -> float:
-  """Returns the sensitivity of a matrix with a single participation."""
-  checks.check(C=C)
-  return jnp.linalg.norm(C, axis=0).max()
-
-
-def _ceil_div(x, y):
-  """Integer division, rounding up (ceiling)."""
-  return -(x // -y)
+from jax_privacy.matrix_factorization import checks
 
 
 def minsep_true_max_participations(
-    n: int, min_sep: int, max_participations: Optional[int] = None
+    n: int, min_sep: int, max_participations: Optional[int]
 ) -> int:
-  """Returns the maximum number of participations for a min_sep pattern.
-
-  This might be less than the `max_participations` limit (if it is given)
-  because `n` is too small.
-
-  Args:
-    n: The number of rounds.
-    min_sep: The minimum separation between participations, where min_sep=1
-      means adjacent indices can be selected.
-    max_participations: The maximum number of participations.
-
-  Returns:
-    The largest number of participations that are actually possible based on the
-    inputs.
-  """
-  # Ideally we would assert min_sep > 0 here, but we want to
-  # use this function in jitted contexts.
-  # TODO: b/329444015 - Add a skip_checks: bool = False option, add
-  # checks here by default, and only disable in jitted contexts.
-  max_part_ub = _ceil_div(n, min_sep)
+  """Returns the actual max participations possible."""
+  # max_part_ub is the maximum number of times any user can participate if they
+  # participate on rounds 0, min_sep, 2*min_sep, ...
+  max_part_ub = (n + min_sep - 1) // min_sep
   if max_participations is None:
     return max_part_ub
   else:
@@ -311,3 +280,12 @@ def fixed_epoch_sensitivity(C: jnp.ndarray, epochs: int) -> float:
   """Like fixed_epoch_sensitivity_for_X(), but takes the encoder C."""
   checks.check(C=C)
   return fixed_epoch_sensitivity_for_X(C.T @ C, epochs)
+
+__all__ = [
+    "fixed_epoch_sensitivity",
+    "fixed_epoch_sensitivity_for_X",
+    "get_min_sep_sensitivity_upper_bound",
+    "get_min_sep_sensitivity_upper_bound_for_X",
+    "get_sensitivity_banded",
+    "get_sensitivity_banded_for_X",
+]

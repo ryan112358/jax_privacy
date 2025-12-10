@@ -149,3 +149,8 @@ def local_reshape_add(x: jax.Array, y: jax.Array) -> jax.Array:
   return (x + reshape(y)).astype(x.dtype)
 
 
+
+__all__ = [
+    "flatten_with_zero_redundancy",
+    "local_reshape_add",
+]

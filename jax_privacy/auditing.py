@@ -715,3 +715,8 @@ class CanaryScoreAuditor:
       best_eps = max(best_eps, eps)
 
     return best_eps
+
+__all__ = [
+    "BootstrapParams",
+    "CanaryScoreAuditor",
+]

@@ -85,13 +85,9 @@ def split_and_pad_global_batch(
   gradients for these examples are correctly zeroed out.
 
   Example Usage:
-
-  ```python
-  >>> indices = np.arange(10)
-  >>> split_and_pad_global_batch(indices, minibatch_size=4)
-  [array([0, 1, 2, 3]), array([4, 5, 6, 7]), array([ 8,  9, -1, -1])]
-
-  ```
+    >>> indices = np.arange(10)
+    >>> split_and_pad_global_batch(indices, minibatch_size=4)
+    [array([0, 1, 2, 3]), array([4, 5, 6, 7]), array([ 8,  9, -1, -1])]
 
   Args:
     indices: A 1D or 2D numpy array of indices representing the global batch.
@@ -124,13 +120,9 @@ def pad_to_multiple_of(indices: np.ndarray, multiple: int) -> np.ndarray:
   """Pads the last dimension of indices to a multiple of multiple.
 
   Example Usage:
-
-  ```python
-  >>> indices = np.arange(10)
-  >>> pad_to_multiple_of(indices, multiple=4)
-  array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, -1, -1])
-
-  ```
+    >>> indices = np.arange(10)
+    >>> pad_to_multiple_of(indices, multiple=4)
+    array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, -1, -1])
 
   Args:
     indices: A 1D array of batch indices.
@@ -178,33 +170,22 @@ class CyclicPoissonSampling(BatchSelectionStrategy):
   below (all with expected batch size 3):
 
   Example Usage (fixed order + multi-epoch) [1]:
-
-  ```python
-  >>> rng = np.random.default_rng(0)
-  >>> b = CyclicPoissonSampling(sampling_prob=1, iterations=8, cycle_length=4)
-  >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
-  [9 2 7] [ 4  5 11] [0 3 6] [10  8  1] [9 2 7] [ 4  5 11] [0 3 6] [10  8  1]
-
-  ```
+    >>> rng = np.random.default_rng(0)
+    >>> b = CyclicPoissonSampling(sampling_prob=1, iterations=8, cycle_length=4)
+    >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
+    [9 2 7] [ 4  5 11] [0 3 6] [10  8  1] [9 2 7] [ 4  5 11] [0 3 6] [10  8  1]
 
   Example Usage (standard Poisson sampling) [2]:
-
-  ```python
-  >>> b = CyclicPoissonSampling(sampling_prob=0.25, iterations=8)
-  >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
-  [5 6 7] [5 8 3 7 2] [ 1  5 11] [0 3] [ 5  1  3  4 10] [2] [4 5 1 3] [6]
-
-  ```
+    >>> b = CyclicPoissonSampling(sampling_prob=0.25, iterations=8)
+    >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
+    [5 6 7] [5 8 3 7 2] [ 1  5 11] [0 3] [ 5  1  3  4 10] [2] [4 5 1 3] [6]
 
   Example Usage (BandMF-style sampling) [3]:
+    >>> p = 0.5
+    >>> b = CyclicPoissonSampling(sampling_prob=p, iterations=6, cycle_length=2)
+    >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
+    [2 4] [1 8 9] [2 7 5 4] [11  1  3] [10  2  5  0  4] [ 1 11  6]
 
-  ```python
-  >>> p = 0.5
-  >>> b = CyclicPoissonSampling(sampling_prob=p, iterations=6, cycle_length=2)
-  >>> print(*b.batch_iterator(12, rng=rng), sep=' ')
-  [2 4] [1 8 9] [2 7 5 4] [11  1  3] [10  2  5  0  4] [ 1 11  6]
-
-  ```
 
   References:
   [1] https://arxiv.org/abs/2211.06530
@@ -324,23 +305,19 @@ class UserSelectionStrategy:
   users.
 
   Example Usage:
-
-  ```python
-  >>> rng = np.random.default_rng(0)
-  >>> base_strategy = CyclicPoissonSampling(sampling_prob=1, iterations=5)
-  >>> strategy = UserSelectionStrategy(base_strategy, 2)
-  >>> user_ids = np.array([0,0,0,1,1,2])
-  >>> iterator = strategy.batch_iterator(user_ids, rng)
-  >>> print(next(iterator))
-  [[5 5]
-   [0 1]
-   [3 4]]
-  >>> print(next(iterator))
-  [[5 5]
-   [2 0]
-   [3 4]]
-
-  ```
+    >>> rng = np.random.default_rng(0)
+    >>> base_strategy = CyclicPoissonSampling(sampling_prob=1, iterations=5)
+    >>> strategy = UserSelectionStrategy(base_strategy, 2)
+    >>> user_ids = np.array([0,0,0,1,1,2])
+    >>> iterator = strategy.batch_iterator(user_ids, rng)
+    >>> print(next(iterator))
+    [[5 5]
+     [0 1]
+     [3 4]]
+    >>> print(next(iterator))
+    [[5 5]
+     [2 0]
+     [3 4]]
 
   Attributes:
     base_strategy: The base batch selection strategy to apply at the user level.
@@ -395,3 +372,13 @@ class UserSelectionStrategy:
 
     for user_batch in self.base_strategy.batch_iterator(num_users, rng):
       yield np.array([get_user_batch(uid) for uid in user_batch])
+
+__all__ = [
+    "PartitionType",
+    "split_and_pad_global_batch",
+    "pad_to_multiple_of",
+    "BatchSelectionStrategy",
+    "CyclicPoissonSampling",
+    "BallsInBinsSampling",
+    "UserSelectionStrategy",
+]

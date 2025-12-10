@@ -25,18 +25,14 @@ pseudo-random key, each call to `update` uses this key to generate fresh
 noise, and splits it into a new key for future steps.
 
 Example Usage:
-
-```python
->>> import jax
->>> privatizer = gaussian_privatizer(stddev=1.0, prng_key=jax.random.key(0))
->>> model = grad = jax.numpy.zeros(10)
->>> noise_state = privatizer.init(model)
->>> for _ in range(4):
-...   noisy_grad, noise_state = privatizer.update(
-...     sum_of_clipped_grads=grad, noise_state=noise_state
-...   )
-
-```
+  >>> import jax
+  >>> privatizer = gaussian_privatizer(stddev=1.0, prng_key=jax.random.key(0))
+  >>> model = grad = jax.numpy.zeros(10)
+  >>> noise_state = privatizer.init(model)
+  >>> for _ in range(4):
+  ...   noisy_grad, noise_state = privatizer.update(
+  ...     sum_of_clipped_grads=grad, noise_state=noise_state
+  ...   )
 
 More powerful privatizers, like those based on matrix factorization have
 richer state representations, but this is abstracted away from the user via
@@ -279,3 +275,9 @@ def _streaming_matrix_factorization_privatizer(
     return noisy_grads, (new_key, new_state)
 
   return optax.GradientTransformation(init, privatize)
+
+__all__ = [
+    "SupportedStrategies",
+    "matrix_factorization_privatizer",
+    "gaussian_privatizer",
+]

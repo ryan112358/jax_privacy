@@ -334,3 +334,15 @@ def _multiply_scalar(self: StreamingMatrix, other: float) -> StreamingMatrix:
 StreamingMatrix.__matmul__ = _multiply_any
 StreamingMatrix.__mul__ = _multiply_scalar
 StreamingMatrix.scale_rows_and_columns = scale_rows_and_columns
+
+__all__ = [
+    "State",
+    "StreamingMatrix",
+    "diagonal",
+    "identity",
+    "momentum_sgd_matrix",
+    "multiply_array",
+    "multiply_streaming_matrices",
+    "prefix_sum",
+    "scale_rows_and_columns",
+]

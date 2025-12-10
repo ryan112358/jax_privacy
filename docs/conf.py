@@ -82,6 +82,9 @@ autodoc2_render_plugin = "myst"
 autodoc2_output_dir = "api"
 autodoc2_hidden_objects = ["private", "inherited", "dunder"]
 autodoc2_index_template = None
+autodoc2_module_all_regexes = [
+    r"jax_privacy.*",
+]
 
 # Configure autodoc settings
 autoclass_content = 'both'
@@ -106,3 +109,7 @@ collections = {
         'ignore': 'BUILD',
     }
 }
+
+autodoc2_hidden_regexes = [
+    r".*__all__",
+]
