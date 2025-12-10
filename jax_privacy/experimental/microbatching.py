@@ -380,3 +380,10 @@ def verify_early_stopping_order(
   cond3 = (num_padding_examples[-num_all_padding:] == microbatch_size).all()
   cond3 = jax.lax.select(num_all_padding == 0, True, cond3)
   return cond1 & cond2 & cond3
+
+__all__ = [
+    "AccumulationType",
+    "compute_early_stopping_order",
+    "microbatch",
+    "verify_early_stopping_order",
+]

@@ -700,3 +700,8 @@ def _get_random_int64() -> np.int64:
   return np.random.randint(
       low=int64_info.min, high=int64_info.max, dtype=np.int64
   )
+
+__all__ = [
+    "DPKerasConfig",
+    "make_private",
+]

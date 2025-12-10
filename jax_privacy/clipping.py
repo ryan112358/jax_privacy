@@ -217,13 +217,10 @@ def clipped_fun(
   """Transforms a function to clip its output and sum across a batch.
 
   Example Usage:
-
-  ```python
-  >>> data = jnp.array([0, 1, 2, 3, 4, 5])
-  >>> clipped_mean = clipped_fun(jnp.mean, l2_clip_norm=1.0)
-  >>> clipped_mean(data)
-  Array(5., dtype=float32)
-  ```
+    >>> data = jnp.array([0, 1, 2, 3, 4, 5])
+    >>> clipped_mean = clipped_fun(jnp.mean, l2_clip_norm=1.0)
+    >>> clipped_mean(data)
+    Array(5., dtype=float32)
 
   Formal Guarantees:
     For the first function output:
@@ -412,39 +409,30 @@ def clipped_grad(
   on this design choice.
 
   Example Usage:
-
-  ```python
-  >>> import jax.numpy as jnp
-  >>> f = lambda param, data: 0.5 * jnp.mean((data - param)**2)
-  >>> g = clipped_grad(f, l2_clip_norm=jnp.inf)
-  >>> g(3.0, jnp.array([0, 7, -2]))
-  Array(4., dtype=float32)
-  ```
+    >>> import jax.numpy as jnp
+    >>> f = lambda param, data: 0.5 * jnp.mean((data - param)**2)
+    >>> g = clipped_grad(f, l2_clip_norm=jnp.inf)
+    >>> g(3.0, jnp.array([0, 7, -2]))
+    Array(4., dtype=float32)
 
   Example Usage (with Auxiliary Output):
-
-  ```python
-  >>> g = clipped_grad(
-  ...   f, l2_clip_norm=jnp.inf, return_values=True, return_grad_norms=True
-  ... )
-  >>> _, aux = g(3.0, jnp.array([0, 7, -2]))
-  >>> aux.values
-  Array([ 4.5,  8. , 12.5], dtype=float32)
-  >>> aux.grad_norms
-  Array([3., 4., 5.], dtype=float32)
-  ```
+    >>> g = clipped_grad(
+    ...   f, l2_clip_norm=jnp.inf, return_values=True, return_grad_norms=True
+    ... )
+    >>> _, aux = g(3.0, jnp.array([0, 7, -2]))
+    >>> aux.values
+    Array([ 4.5,  8. , 12.5], dtype=float32)
+    >>> aux.grad_norms
+    Array([3., 4., 5.], dtype=float32)
 
   Example Usage (with Per-User Clipping):
-
-  ```python
-  >>> f = lambda param, data: 0.5 * jnp.mean((data - param)**2)
-  >>> g = clipped_grad(f, l2_clip_norm=jnp.inf, keep_batch_dim=False)
-  >>> userA = jnp.array([1, -1])
-  >>> userB = jnp.array([2, 2])
-  >>> userC = jnp.array([0, 3])
-  >>> g(3.0, jnp.array([userA, userB, userC]))
-  Array(5.5, dtype=float32)
-  ```
+    >>> f = lambda param, data: 0.5 * jnp.mean((data - param)**2)
+    >>> g = clipped_grad(f, l2_clip_norm=jnp.inf, keep_batch_dim=False)
+    >>> userA = jnp.array([1, -1])
+    >>> userB = jnp.array([2, 2])
+    >>> userC = jnp.array([0, 3])
+    >>> g(3.0, jnp.array([userA, userB, userC]))
+    Array(5.5, dtype=float32)
 
   Formal Guarantees:
     For the gradient output:
@@ -559,3 +547,19 @@ def clipped_grad(
       prng_argnum=prng_argnum,
       spmd_axis_name=spmd_axis_name,
   )
+
+__all__ = [
+    "AuxiliaryOutput",
+    "BoundedSensitivityCallable",
+    "clip_pytree",
+    "clipped_fun",
+    "clipped_grad",
+]
+
+__all__ = [
+    "AuxiliaryOutput",
+    "BoundedSensitivityCallable",
+    "clip_pytree",
+    "clipped_fun",
+    "clipped_grad",
+]

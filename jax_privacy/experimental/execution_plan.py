@@ -313,3 +313,8 @@ class BandMFExecutionPlanConfig:
         noise_addition_transform=privatizer,
         dp_event=dp_event,
     )
+
+__all__ = [
+    "BandMFExecutionPlanConfig",
+    "DPExecutionPlan",
+]
