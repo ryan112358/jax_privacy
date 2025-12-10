@@ -94,7 +94,7 @@ def optimize(
     max_optimizer_steps: The (maximum) number of optimization steps.
     grad: Flag indicating if the loss_fn also returns the gradient.
     callback: Optional callback function to call after each optimization step.
-      The callback will be called after each iteration with a `CallbackArgs`
+      The callback will be called after each iteration with a
       dataclass.  Early stopping can be achieved by having the callback return a
       truthy value.
     optimizer: An optax.GradientTransformation to use as the underlying
@@ -102,7 +102,7 @@ def optimize(
 
   Returns:
     The parameters that approximately locally minimize the given loss_fun,
-    casted back to the same types as the original `params`.
+    casted back to the same types as the original .
   """
   loss_and_grad = loss_fn if grad else jax.value_and_grad(loss_fn)
   value_fn = (lambda x: loss_fn(x)[0]) if grad else loss_fn
@@ -130,3 +130,9 @@ def optimize(
       break
 
   return jax.tree.map(jnp.astype, params, original_dtypes)
+
+__all__ = [
+    "CallbackArgs",
+    "DEFAULT_OPTIMIZER",
+    "optimize",
+]

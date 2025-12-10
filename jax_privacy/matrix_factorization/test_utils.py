@@ -75,3 +75,5 @@ def scale_max_examples(scale: float) -> int:
     The scaled max_examples, at least 1.
   """
   return max(1, int(round(scale * hypothesis.settings.default.max_examples)))
+
+__all__ = []

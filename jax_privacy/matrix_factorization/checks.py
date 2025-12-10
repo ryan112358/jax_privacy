@@ -152,3 +152,12 @@ def check(
         'Expected matrix shapes to match {expected_shapes}, but found shapes:\n'
         + str(jax.tree_util.tree_map(lambda x: x.shape, not_none))
     )
+
+__all__ = [
+    "check",
+    "check_finite",
+    "check_is_matrix",
+    "check_lower_triangular",
+    "check_square",
+    "check_symmetric",
+]

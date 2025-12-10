@@ -372,3 +372,13 @@ class UserSelectionStrategy:
 
     for user_batch in self.base_strategy.batch_iterator(num_users, rng):
       yield np.array([get_user_batch(uid) for uid in user_batch])
+
+__all__ = [
+    "PartitionType",
+    "split_and_pad_global_batch",
+    "pad_to_multiple_of",
+    "BatchSelectionStrategy",
+    "CyclicPoissonSampling",
+    "BallsInBinsSampling",
+    "UserSelectionStrategy",
+]

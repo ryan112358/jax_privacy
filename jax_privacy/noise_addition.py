@@ -288,3 +288,9 @@ def _streaming_matrix_factorization_privatizer(
     return noisy_grads, (new_key, new_state)
 
   return optax.GradientTransformation(init, privatize)
+
+__all__ = [
+    "SupportedStrategies",
+    "matrix_factorization_privatizer",
+    "gaussian_privatizer",
+]

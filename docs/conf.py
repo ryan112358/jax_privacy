@@ -55,8 +55,7 @@ release = '1.1.0'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
+    'autodoc2',
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
@@ -64,7 +63,6 @@ extensions = [
     'myst_nb',
     'sphinx_collections',
     'sphinx.ext.doctest',
-    'sphinx_autodoc_typehints',
 ]
 
 autodoc_type_aliases = {
@@ -73,12 +71,23 @@ autodoc_type_aliases = {
     'PydanticDataclass': 'pydantic.PydanticDataclass',
 }
 
-autosummary_generate = True
+# Configure autodoc2 settings
+autodoc2_packages = [
+    {
+        "path": "../jax_privacy",
+        "exclude_files": ["*_test.py"],
+    },
+]
+autodoc2_render_plugin = "myst"
+autodoc2_output_dir = "api"
+autodoc2_hidden_objects = ["private", "inherited", "dunder"]
+autodoc2_index_template = None
+autodoc2_module_all_regexes = [
+    r"jax_privacy.*",
+]
 
 # Configure autodoc settings
-autodoc_typehints = 'signature'
 autoclass_content = 'both'
-autodoc_member_order = 'bysource'
 napoleon_use_ivar = True
 
 templates_path = ['_templates']
@@ -100,3 +109,7 @@ collections = {
         'ignore': 'BUILD',
     }
 }
+
+autodoc2_hidden_regexes = [
+    r".*__all__",
+]

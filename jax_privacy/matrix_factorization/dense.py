@@ -295,3 +295,13 @@ def optimize(
   )
 
   return strategy_from_X(X)
+
+__all__ = [
+    "get_orthogonal_mask",
+    "max_error",
+    "mean_error",
+    "optimize",
+    "per_query_error",
+    "pg_tol_termination_fn",
+    "strategy_from_X",
+]

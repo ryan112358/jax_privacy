@@ -34,12 +34,4 @@ Keras training workflow.
  API Reference
 ***************
 
-.. automodule:: jax_privacy.keras_api
-   :no-members:
-   :no-undoc-members:
-
-.. autoclass:: jax_privacy.keras_api.DPKerasConfig
-   :members:
-   :show-inheritance:
-
-.. autofunction:: jax_privacy.keras_api.make_private
+See :doc:`api/jax_privacy/jax_privacy.keras_api`.

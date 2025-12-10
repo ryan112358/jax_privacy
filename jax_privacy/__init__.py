@@ -26,3 +26,13 @@ from jax_privacy import noise_addition
 from jax_privacy.clipping import clipped_grad
 
 __version__ = '1.1.0'
+
+__all__ = [
+    "accounting",
+    "auditing",
+    "batch_selection",
+    "experimental",
+    "matrix_factorization",
+    "noise_addition",
+    "clipped_grad",
+]

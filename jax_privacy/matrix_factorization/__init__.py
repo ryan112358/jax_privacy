@@ -16,3 +16,5 @@
 """Public API for matrix factorization."""
 
 from .streaming_matrix import StreamingMatrix
+
+__all__ = ["StreamingMatrix"]

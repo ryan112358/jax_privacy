@@ -6,3 +6,5 @@ ipykernel
 sphinx_autodoc_typehints
 tensorflow
 keras
+myst-parser
+sphinx-autodoc2

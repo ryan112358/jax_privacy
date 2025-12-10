@@ -67,3 +67,5 @@ def optimal_physical_batch_sizes(
     return best_solution, best_cost
 
   return set(solve(num_compilations, len(unique)-1)[0])
+
+__all__ = ["optimal_physical_batch_sizes"]

@@ -547,3 +547,19 @@ def clipped_grad(
       prng_argnum=prng_argnum,
       spmd_axis_name=spmd_axis_name,
   )
+
+__all__ = [
+    "AuxiliaryOutput",
+    "BoundedSensitivityCallable",
+    "clip_pytree",
+    "clipped_fun",
+    "clipped_grad",
+]
+
+__all__ = [
+    "AuxiliaryOutput",
+    "BoundedSensitivityCallable",
+    "clip_pytree",
+    "clipped_fun",
+    "clipped_grad",
+]
