@@ -5,7 +5,8 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_torch import Transformer, TransformerConfig, generate_dummy_data
+from benchmarks.transformer_torch import Transformer, generate_dummy_data
+from benchmarks.config import TransformerConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 
@@ -179,16 +180,16 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark Transformer gradients (PyTorch/Opacus).')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
+    parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
+                        help='Model size: small, medium, large')
     args = parser.parse_args()
 
-    config = TransformerConfig(
-        vocab_size=1000,
-        hidden_size=128,
-        num_heads=4,
-        num_layers=2,
-        max_len=64,
-        dropout_rate=0.0
-    )
+    if args.size == 'small':
+        config = TransformerConfig.small()
+    elif args.size == 'medium':
+        config = TransformerConfig.medium()
+    elif args.size == 'large':
+        config = TransformerConfig.large()
 
     batch_sizes = [16, 32, 64]
     results = []

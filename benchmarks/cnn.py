@@ -2,20 +2,7 @@ from flax import nnx
 import jax.numpy as jnp
 import jax
 from typing import Sequence, Tuple
-
-class CNNConfig:
-    """Configuration for the CNN model."""
-    def __init__(self,
-                 input_shape: Tuple[int, int, int] = (32, 32, 3),
-                 num_classes: int = 10,
-                 features: Sequence[int] = (32, 64),
-                 kernel_size: Tuple[int, int] = (3, 3),
-                 hidden_size: int = 128):
-        self.input_shape = input_shape
-        self.num_classes = num_classes
-        self.features = features
-        self.kernel_size = kernel_size
-        self.hidden_size = hidden_size
+from benchmarks.config import CNNConfig
 
 class CNN(nnx.Module):
     """A basic CNN model implemented with Flax NNX."""
