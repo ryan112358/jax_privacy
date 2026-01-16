@@ -6,15 +6,14 @@ import argparse
 import json
 import functools
 import os
-from benchmarks.transformer import Transformer, generate_dummy_data as generate_transformer_data
-from benchmarks.cnn import CNN, generate_dummy_data as generate_cnn_data
+from benchmarks.transformer_models import Transformer, TransformerConfig, generate_dummy_data as generate_transformer_data
+from benchmarks.cnn_models import CNN, CNNConfig, generate_dummy_data as generate_cnn_data
 from benchmarks.diffusion import FlaxDiffusion, DiffusionConfig, generate_dummy_data_flax
-from benchmarks.config import TransformerConfig, CNNConfig
 from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
 import optax
 
-def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, num_iterations=50):
+def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, num_iterations=50, microbatch_size=None):
     print(f"Benchmarking with config: batch_size={batch_size}, model={model_class.__name__}")
 
     key = jax.random.key(0)
@@ -95,6 +94,9 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
         "throughput": throughput,
         "model": model_class.__name__
     }
+
+    if microbatch_size is not None:
+        res["microbatch_size"] = microbatch_size
 
     # Add model specific config info
     if isinstance(config, TransformerConfig):
@@ -196,7 +198,7 @@ def main():
              optax.adamw(learning_rate=1e-4)
          )
 
-    res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, args.batch_size)
+    res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, args.batch_size, microbatch_size=args.microbatch_size)
     res['mode'] = args.mode
     res['microbatch_size'] = args.microbatch_size
 

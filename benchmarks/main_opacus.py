@@ -5,10 +5,9 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_torch import Transformer, generate_dummy_data as generate_transformer_data
+from benchmarks.transformer_models import TransformerTorch as Transformer, TransformerConfig, generate_dummy_data_torch as generate_dummy_data
+from benchmarks.cnn_models import CNNTorch as CNN, CNNConfig, generate_dummy_data_torch as generate_cnn_data
 from benchmarks.diffusion import TorchDiffusion, DiffusionConfig, generate_dummy_data_torch
-from benchmarks.cnn_torch import CNN, generate_dummy_data as generate_cnn_data
-from benchmarks.config import TransformerConfig, CNNConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 
@@ -34,8 +33,8 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     if model_name == 'Transformer':
         model = Transformer(config).to(device)
         # Generate data
-        d = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=42).to(device)
-        t = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=43).to(device)
+        d = generate_dummy_data(batch_size, config.max_len, config.vocab_size, seed=42).to(device)
+        t = generate_dummy_data(batch_size, config.max_len, config.vocab_size, seed=43).to(device)
         data_batch, targets_batch = d, t
 
         def loss_fn(output, targets):
@@ -191,6 +190,8 @@ def main():
                         help='Benchmark mode: standard or clipped')
     parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN', 'Diffusion'],
                         help='Model to benchmark')
+    parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
+                        help='Model size for CNN/Diffusion')
     parser.add_argument('--batch_size', type=int, help='Batch size (optional, overrides default list)')
     parser.add_argument('--output_file', type=str, help='Output JSON file to append results')
     parser.add_argument('--max_len', type=int, default=64, help='Max sequence length for Transformer')
