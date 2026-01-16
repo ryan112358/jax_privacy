@@ -5,6 +5,7 @@ import time
 import argparse
 import json
 import functools
+import os
 from benchmarks.transformer import Transformer, generate_dummy_data as generate_transformer_data
 from benchmarks.cnn import CNN, generate_dummy_data as generate_cnn_data
 from benchmarks.config import TransformerConfig, CNNConfig
@@ -13,7 +14,7 @@ from jax_privacy import noise_addition
 import optax
 
 def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, num_iterations=50):
-    print(f"Benchmarking with config: batch_size={batch_size}")
+    print(f"Benchmarking with config: batch_size={batch_size}, model={model_class.__name__}")
 
     key = jax.random.key(0)
     key_model, key_data = jax.random.split(key, 2)
@@ -29,31 +30,25 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
     def loss_fn(params, batch):
         m = nnx.merge(graphdef, params, others)
         x, y = batch
-        # Handle 1D input if necessary (though not expected with current generators)
+        # Handle 1D input if necessary
         if x.ndim == 1:
             x = jnp.expand_dims(x, 0)
+
         logits = m(x)
-        logits = logits.reshape(-1, logits.shape[-1])
-        y = y.reshape(-1)
+
+        if logits.ndim == 3: # Sequence task (Transformer)
+            logits = logits.reshape(-1, logits.shape[-1])
+            y = y.reshape(-1)
+
         one_hot = jax.nn.one_hot(y, logits.shape[-1])
         loss = optax.softmax_cross_entropy(logits=logits, labels=one_hot).mean()
         return loss
 
-    # Bind loss_fn to grad_fn if it's jax.grad or clipped_grad wrapper that expects func
-    # The requirement says "consumes a grad_fn (like jax.grad, or functools.partial(jax_privacy.clipped_grad, ...)"
-    # So we assume grad_fn takes (fun, ...) and returns a gradient function.
-    # OR it consumes a ready-to-use gradient function?
-    # "consumes a grad_fn (like jax.grad ...)" usually means a function transformation.
-    # So we apply it to loss_fn.
-
     if isinstance(grad_fn, functools.partial) and grad_fn.func == clipped_grad:
-         # partial(clipped_grad, ...)
-         # clipped_grad(f, ...) returns a function that computes grads
          gradient_computer = grad_fn(loss_fn)
     elif grad_fn == jax.grad:
          gradient_computer = grad_fn(loss_fn)
     else:
-         # Fallback, assume it acts like jax.grad
          gradient_computer = grad_fn(loss_fn)
 
     @jax.jit
@@ -79,11 +74,31 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
 
     print(f"Avg time: {avg_time:.4f}s, Throughput: {throughput:.2f} samples/s")
 
-    return {
+    res = {
         "batch_size": batch_size,
         "avg_time": avg_time,
-        "throughput": throughput
+        "throughput": throughput,
+        "model": model_class.__name__
     }
+
+    # Add model specific config info
+    if isinstance(config, TransformerConfig):
+        res.update({
+            "vocab_size": config.vocab_size,
+            "hidden_size": config.hidden_size,
+            "num_heads": config.num_heads,
+            "num_layers": config.num_layers,
+            "max_len": config.max_len
+        })
+    elif isinstance(config, CNNConfig):
+        res.update({
+            "input_shape": list(config.input_shape),
+            "num_classes": config.num_classes,
+            "features": list(config.features),
+            "hidden_size": config.hidden_size
+        })
+
+    return res
 
 def main():
     parser = argparse.ArgumentParser(description='Benchmark Transformer and CNN gradients.')
@@ -93,6 +108,12 @@ def main():
                         help='Model to benchmark: transformer or cnn')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size: small, medium, large')
+
+    # Args from origin/main
+    parser.add_argument('--batch_size', type=int, required=True, help='Batch size')
+    parser.add_argument('--microbatch_size', type=int, help='Microbatch size for clipped mode')
+    parser.add_argument('--output_file', type=str, default='results.json')
+
     args = parser.parse_args()
 
     if args.model == 'transformer':
@@ -128,60 +149,28 @@ def main():
         grad_fn = jax.grad
         optimizer = optax.adamw(learning_rate=1e-4)
     elif args.mode == 'clipped':
-        # Create a privatizer
-        # We need a key for the privatizer.
-        # But wait, the privatizer state is part of optimizer state in optax chain.
-        # So we can create it here.
-        key = jax.random.key(42)
-        key_noise = jax.random.split(key)[0]
+         grad_fn = functools.partial(
+            clipped_grad,
+            l2_clip_norm=1.0,
+            keep_batch_dim=True,
+            normalize_by=args.batch_size,
+            microbatch_size=args.microbatch_size
+        )
+         privatizer = noise_addition.gaussian_privatizer(stddev=0.1, prng_key=jax.random.key(1337))
+         optimizer = optax.chain(
+             privatizer,
+             optax.adamw(learning_rate=1e-4)
+         )
 
-        # NOTE: In previous main.py, keep_batch_dim=True and normalize_by=batch_size were used.
-        # We need to capture batch_size in the grad_fn construction if it's constant,
-        # but here we iterate over batch_sizes.
-        # The clipped_grad function accepts normalize_by.
-        # We might need to handle batch_size dynamically or re-create grad_fn inside loop.
-        # The prompt says: "Modify main so that it consumes a grad_fn ... and an optimizer"
-        # Since batch_size varies, we should probably pass the partial, but normalize_by depends on batch_size.
-        # If we pass a partial that expects (loss_fn), then inside benchmark we call it.
-        # But clipped_grad(loss_fn, ..., normalize_by=BS).
-        # We can pass a factory? Or just update it inside the loop.
-        # But `benchmark` signature takes `grad_fn`.
-        # Maybe `benchmark` should take `grad_fn_factory`?
-        # Or simpler: The user prompt says "Use a single shared config ...".
-        # It also says "Modify main so that it consumes a grad_fn... and an optimizer".
-        # If I strictly follow "consumes a grad_fn", then `benchmark` takes a fixed `grad_fn`.
-        # If `grad_fn` is fixed, then `normalize_by` must be fixed or handled inside.
-        # `jax_privacy.clipped_grad` allows `normalize_by` to be an int.
-        # If I want to sweep batch sizes, I need to change `normalize_by`.
-        # So I should probably move the loop over batch sizes to `main` and call `benchmark` for each,
-        # constructing `grad_fn` appropriately for each batch size.
-        pass # Logic implemented below
+    res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, args.batch_size)
+    res['mode'] = args.mode
+    res['microbatch_size'] = args.microbatch_size
 
-    batch_sizes = [16, 32, 64]
-    results = []
+    # Append to results file
+    with open(args.output_file, 'a') as f:
+        f.write(json.dumps(res) + '\n')
 
-    for bs in batch_sizes:
-        if args.mode == 'standard':
-            grad_fn = jax.grad
-            optimizer = optax.adamw(learning_rate=1e-4)
-        elif args.mode == 'clipped':
-             grad_fn = functools.partial(
-                clipped_grad,
-                l2_clip_norm=1.0,
-                keep_batch_dim=True,
-                normalize_by=bs # Use current batch size
-            )
-             privatizer = noise_addition.gaussian_privatizer(stddev=0.1, prng_key=jax.random.key(1337))
-             optimizer = optax.chain(
-                 privatizer,
-                 optax.adamw(learning_rate=1e-4)
-             )
-
-        res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, bs)
-        res['mode'] = args.mode # Add mode back for consistency
-        results.append(res)
-
-    print("RESULTS_JSON=" + json.dumps(results))
+    print(f"Result appended to {args.output_file}")
 
 if __name__ == "__main__":
     main()

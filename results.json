@@ -1,0 +1,4 @@
+{"batch_size": 16, "avg_time": 0.13731343746185304, "throughput": 116.52173520486625, "model": "Transformer", "vocab_size": 1000, "hidden_size": 256, "num_heads": 4, "num_layers": 2, "max_len": 64, "mode": "standard", "microbatch_size": null}
+{"batch_size": 16, "avg_time": 0.2068008279800415, "throughput": 77.36912930321618, "model": "Transformer", "vocab_size": 1000, "hidden_size": 256, "num_heads": 4, "num_layers": 2, "max_len": 64, "mode": "clipped", "microbatch_size": 4}
+{"batch_size": 16, "avg_time": 0.10963229656219482, "throughput": 145.94239564180924, "model": "Transformer", "vocab_size": 1000, "hidden_size": 256, "num_heads": 4, "num_layers": 2, "max_len": 64, "mode": "standard", "microbatch_size": null}
+{"batch_size": 16, "avg_time": 0.19595879077911377, "throughput": 81.6498200279023, "model": "Transformer", "vocab_size": 1000, "hidden_size": 256, "num_heads": 4, "num_layers": 2, "max_len": 64, "mode": "clipped", "microbatch_size": 4}
