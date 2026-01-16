@@ -5,17 +5,11 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_torch import Transformer, TransformerConfig, generate_dummy_data
+from benchmarks.transformer_torch import Transformer, TransformerConfig, generate_dummy_data as generate_transformer_data
+from benchmarks.cnn_torch import CNN, CNNConfig, generate_dummy_data as generate_cnn_data
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 
-# Dataset that wraps a single batch and returns it repeatedly (effectively)
-# Since we want to benchmark "num_iterations" of updates on the same data.
-# However, Opacus expects to iterate over a DataLoader.
-# We will create a dataset that has (batch_size * num_iterations) length,
-# but the data is just the same batch repeated.
-# Actually, better to just generate random data for the whole run if memory permits,
-# OR just repeat the same data to save memory but allow iteration.
 class BenchmarkDataset(TensorDataset):
     def __init__(self, data, targets, total_length):
         super().__init__(data, targets)
@@ -28,38 +22,46 @@ class BenchmarkDataset(TensorDataset):
         return self.total_length
 
     def __getitem__(self, index):
-        # Return item from the original batch using modulo
         real_idx = index % self.original_len
         return self.data[real_idx], self.targets[real_idx]
 
-def benchmark(mode, config, batch_size, num_iterations=50):
-    print(f"Benchmarking mode='{mode}' with config: batch_size={batch_size}")
+def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
+    print(f"Benchmarking model='{model_name}', mode='{mode}' with config: batch_size={batch_size}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = Transformer(config).to(device)
+    if model_name == 'Transformer':
+        model = Transformer(config).to(device)
+        # Generate data
+        d = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=42).to(device)
+        t = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=43).to(device)
+        data_batch, targets_batch = d, t
+
+        def loss_fn(output, targets):
+             return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1))
+
+    elif model_name == 'CNN':
+        model = CNN(config).to(device)
+        d, t = generate_cnn_data(batch_size, config.input_shape, config.num_classes, seed=42)
+        data_batch, targets_batch = d.to(device), t.to(device)
+
+        def loss_fn(output, targets):
+             return nn.CrossEntropyLoss()(output, targets)
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
 
     if mode == 'clipped':
         model = ModuleValidator.fix(model)
         ModuleValidator.validate(model, strict=False)
 
     model.train()
-
     optimizer = optim.AdamW(model.parameters(), lr=1e-4)
 
-    # Generate one batch of dummy data
-    # To match main.py, we use seed logic but here we just use fixed seed
-    data_batch = generate_dummy_data(batch_size, config.max_len, config.vocab_size, seed=42).to(device)
-    targets_batch = generate_dummy_data(batch_size, config.max_len, config.vocab_size, seed=43).to(device)
-
-    criterion = nn.CrossEntropyLoss()
-
     if mode == 'standard':
-        # Simple loop
         # Warmup
         optimizer.zero_grad()
         output = model(data_batch)
-        loss = criterion(output.view(-1, config.vocab_size), targets_batch.view(-1))
+        loss = loss_fn(output, targets_batch)
         loss.backward()
         optimizer.step()
         if device.type == 'cuda':
@@ -69,7 +71,7 @@ def benchmark(mode, config, batch_size, num_iterations=50):
         for _ in range(num_iterations):
             optimizer.zero_grad()
             output = model(data_batch)
-            loss = criterion(output.view(-1, config.vocab_size), targets_batch.view(-1))
+            loss = loss_fn(output, targets_batch)
             loss.backward()
             optimizer.step()
 
@@ -78,22 +80,10 @@ def benchmark(mode, config, batch_size, num_iterations=50):
         end_time = time.time()
 
     elif mode == 'clipped':
-        # For Opacus, we need a DataLoader
-        # We simulate num_iterations steps.
-        # Opacus updates per step (batch).
-        dataset = BenchmarkDataset(data_batch, targets_batch, batch_size * num_iterations)
-        dataloader = DataLoader(dataset, batch_size=batch_size) # default shuffle=False
+        dataset = BenchmarkDataset(data_batch, targets_batch, batch_size * (num_iterations + 10))
+        dataloader = DataLoader(dataset, batch_size=batch_size)
 
         privacy_engine = PrivacyEngine()
-
-        # Match noise parameters to main.py
-        # main.py: noise_std = 0.1, clip_norm = 1.0, normalize_by = batch_size
-        # The noise added to the average gradient is N(0, 0.1^2).
-        # Opacus adds noise to the sum gradient: N(0, (noise_multiplier * clip_norm)^2)
-        # Then averages by dividing by batch_size.
-        # Resulting noise on average gradient: N(0, (noise_multiplier * clip_norm / batch_size)^2).
-        # We want noise_multiplier * clip_norm / batch_size = 0.1
-        # clip_norm = 1.0 -> noise_multiplier = 0.1 * batch_size
 
         noise_multiplier = 0.1 * batch_size
         max_grad_norm = 1.0
@@ -106,35 +96,13 @@ def benchmark(mode, config, batch_size, num_iterations=50):
             max_grad_norm=max_grad_norm,
         )
 
-        # Warmup (1 step)
-        # We need to manually do one step or create a small loader
-        # Let's just run one step on the data_batch manually?
-        # No, make_private wraps the optimizer, so we must use the wrapped optimizer.
-        # But wrapped optimizer expects step to be called in context?
-        # Ideally we just iterate the dataloader.
-
-        # To support warmup + measurement, let's create a loader that has num_iterations + 1 batches.
-        dataset = BenchmarkDataset(data_batch, targets_batch, batch_size * (num_iterations + 1))
-        dataloader = DataLoader(dataset, batch_size=batch_size)
-
-        # We need to re-wrap because I created a new loader?
-        # Actually Opacus wraps the loader just to check batch size/sample rate.
-        # If I replace the loader, I should be fine as long as batch_size is same.
-        # But make_private returns a new loader. I should use that if possible.
-        # Or I can just pass the new loader to make_private again? No, double wrapping model.
-
-        # Simpler: Just make the original dataset larger: num_iterations + 10 (buffer).
-        # Then iterate manually.
-
         iter_loader = iter(dataloader)
 
         # Warmup
-        d, t = next(iter_loader) # d, t are on device if we didn't move dataset to device?
-        # BenchmarkDataset has data on device already.
-
+        d, t = next(iter_loader)
         optimizer.zero_grad()
         output = model(d)
-        loss = criterion(output.view(-1, config.vocab_size), t.view(-1))
+        loss = loss_fn(output, t)
         loss.backward()
         optimizer.step()
 
@@ -142,7 +110,6 @@ def benchmark(mode, config, batch_size, num_iterations=50):
             torch.cuda.synchronize()
 
         start_time = time.time()
-        # Run exactly num_iterations
         for _ in range(num_iterations):
             try:
                 d, t = next(iter_loader)
@@ -151,7 +118,7 @@ def benchmark(mode, config, batch_size, num_iterations=50):
 
             optimizer.zero_grad()
             output = model(d)
-            loss = criterion(output.view(-1, config.vocab_size), t.view(-1))
+            loss = loss_fn(output, t)
             loss.backward()
             optimizer.step()
 
@@ -169,6 +136,7 @@ def benchmark(mode, config, batch_size, num_iterations=50):
     print(f"{mode}: Avg time: {avg_time:.4f}s, Throughput: {throughput:.2f} samples/s")
 
     return {
+        "model": model_name,
         "mode": mode,
         "batch_size": batch_size,
         "avg_time": avg_time,
@@ -176,25 +144,36 @@ def benchmark(mode, config, batch_size, num_iterations=50):
     }
 
 def main():
-    parser = argparse.ArgumentParser(description='Benchmark Transformer gradients (PyTorch/Opacus).')
+    parser = argparse.ArgumentParser(description='Benchmark gradients (PyTorch/Opacus).')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
+    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN'],
+                        help='Model to benchmark')
     args = parser.parse_args()
 
-    config = TransformerConfig(
-        vocab_size=1000,
-        hidden_size=128,
-        num_heads=4,
-        num_layers=2,
-        max_len=64,
-        dropout_rate=0.0
-    )
+    if args.model == 'Transformer':
+        config = TransformerConfig(
+            vocab_size=1000,
+            hidden_size=128,
+            num_heads=4,
+            num_layers=2,
+            max_len=64,
+            dropout_rate=0.0
+        )
+    elif args.model == 'CNN':
+        config = CNNConfig(
+            input_shape=(32, 32, 3),
+            num_classes=10,
+            features=(32, 64),
+            kernel_size=(3, 3),
+            hidden_size=128
+        )
 
     batch_sizes = [16, 32, 64]
     results = []
 
     for bs in batch_sizes:
-        res = benchmark(args.mode, config, bs)
+        res = run_benchmark(args.mode, args.model, config, bs)
         results.append(res)
 
     print("RESULTS_JSON=" + json.dumps(results))
