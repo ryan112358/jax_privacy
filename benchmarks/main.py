@@ -13,7 +13,7 @@ from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
 import optax
 
-def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, num_iterations=50):
+def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, microbatch_size=None, num_iterations=50):
     print(f"Benchmarking with config: batch_size={batch_size}, model={model_class.__name__}")
 
     key = jax.random.key(0)
@@ -170,7 +170,7 @@ def main():
              optax.adamw(learning_rate=1e-4)
          )
 
-    res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, args.batch_size)
+    res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, args.batch_size, args.microbatch_size)
     res['mode'] = args.mode
     res['microbatch_size'] = args.microbatch_size
 
