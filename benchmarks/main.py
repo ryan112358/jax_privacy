@@ -38,18 +38,25 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
     def loss_fn(params, batch):
         m = nnx.merge(graphdef, params, others)
         x, y = batch
-        # Handle 1D input if necessary
-        if x.ndim == 1:
-            x = jnp.expand_dims(x, 0)
 
-        logits = m(x)
+        if isinstance(x, (tuple, list)):
+            logits = m(*x)
+        else:
+            # Handle 1D input if necessary
+            if hasattr(x, 'ndim') and x.ndim == 1:
+                x = jnp.expand_dims(x, 0)
+            logits = m(x)
 
-        if logits.ndim == 3: # Sequence task (Transformer)
-            logits = logits.reshape(-1, logits.shape[-1])
-            y = y.reshape(-1)
+        if jnp.issubdtype(y.dtype, jnp.floating):
+             # MSE loss for diffusion
+             loss = jnp.mean((logits - y) ** 2)
+        else:
+            if logits.ndim == 3: # Sequence task (Transformer)
+                logits = logits.reshape(-1, logits.shape[-1])
+                y = y.reshape(-1)
 
-        one_hot = jax.nn.one_hot(y, logits.shape[-1])
-        loss = optax.softmax_cross_entropy(logits=logits, labels=one_hot).mean()
+            one_hot = jax.nn.one_hot(y, logits.shape[-1])
+            loss = optax.softmax_cross_entropy(logits=logits, labels=one_hot).mean()
         return loss
 
     if isinstance(grad_fn, functools.partial) and grad_fn.func == clipped_grad:
@@ -84,11 +91,13 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
 
     res = {
         "batch_size": batch_size,
-        "microbatch_size": microbatch_size,
         "avg_time": avg_time,
         "throughput": throughput,
         "model": model_class.__name__
     }
+
+    if microbatch_size is not None:
+        res["microbatch_size"] = microbatch_size
 
     # Add model specific config info
     if isinstance(config, TransformerConfig):
