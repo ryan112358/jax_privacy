@@ -25,6 +25,13 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
 
     opt_state = optimizer.init(params)
 
+    # data_gen_fn signature adaptation
+    # transformer: (bs, seq_len, vocab_size, key) -> (data, targets)
+    # cnn: (bs, input_shape, num_classes, key) -> (data, targets)
+    # The caller main() should wrap data_gen_fn to only take (bs, key) or pass config inside.
+    # In main(), we wrapped it to take (bs, cfg, key) or similar.
+    # Let's assume data_gen_fn passed here takes (batch_size, config, key).
+
     batch = data_gen_fn(batch_size, config, key_data)
 
     def loss_fn(params, batch):
@@ -76,6 +83,7 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
 
     res = {
         "batch_size": batch_size,
+        "microbatch_size": microbatch_size,
         "avg_time": avg_time,
         "throughput": throughput,
         "model": model_class.__name__
