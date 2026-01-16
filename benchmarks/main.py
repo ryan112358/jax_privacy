@@ -10,8 +10,9 @@ from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
 import optax
 
-def benchmark(mode, config, batch_size, num_iterations=50):
+def benchmark(mode, config, batch_size, microbatch_size=None, num_iterations=50):
     print(f"Benchmarking mode='{mode}' with config: batch_size={batch_size}, "
+          f"microbatch_size={microbatch_size}, "
           f"seq_len={config.max_len}, vocab={config.vocab_size}, "
           f"hidden={config.hidden_size}, heads={config.num_heads}, layers={config.num_layers}")
 
@@ -69,7 +70,8 @@ def benchmark(mode, config, batch_size, num_iterations=50):
             loss_fn,
             l2_clip_norm=1.0,
             keep_batch_dim=True,
-            normalize_by=batch_size
+            normalize_by=batch_size,
+            microbatch_size=microbatch_size
         )
 
         @jax.jit
@@ -102,6 +104,7 @@ def benchmark(mode, config, batch_size, num_iterations=50):
     return {
         "mode": mode,
         "batch_size": batch_size,
+        "microbatch_size": microbatch_size,
         "vocab_size": config.vocab_size,
         "hidden_size": config.hidden_size,
         "num_heads": config.num_heads,
@@ -134,25 +137,14 @@ def main():
         dropout_rate=0.0
     )
 
-    # Determine the effective batch size for the run
+    # In clipped mode, pass microbatch_size if provided.
+    microbatch_size = None
     if args.mode == 'clipped' and args.microbatch_size is not None:
-        run_batch_size = args.microbatch_size
-    else:
-        run_batch_size = args.batch_size
+        microbatch_size = args.microbatch_size
 
-    res = benchmark(args.mode, config, run_batch_size)
-
-    # Store original args as well if they differ (e.g. if we want to log the "logical" batch size vs microbatch)
-    # But for now, res contains 'batch_size' which is the one used for the run.
-    if args.mode == 'clipped' and args.microbatch_size is not None:
-        res['microbatch_size'] = args.microbatch_size
-        res['logical_batch_size'] = args.batch_size
-    else:
-        res['microbatch_size'] = None
-        res['logical_batch_size'] = args.batch_size
+    res = benchmark(args.mode, config, args.batch_size, microbatch_size=microbatch_size)
 
     # Append to results file
-    # We will use JSONL format (one JSON per line) to easily append
     with open(args.output_file, 'a') as f:
         f.write(json.dumps(res) + '\n')
 
