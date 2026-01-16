@@ -2,21 +2,7 @@ from flax import nnx
 import jax.numpy as jnp
 import jax
 from typing import Optional
-
-class TransformerConfig:
-    def __init__(self,
-                 vocab_size: int = 1000,
-                 hidden_size: int = 64,
-                 num_heads: int = 4,
-                 num_layers: int = 2,
-                 max_len: int = 32,
-                 dropout_rate: float = 0.0):
-        self.vocab_size = vocab_size
-        self.hidden_size = hidden_size
-        self.num_heads = num_heads
-        self.num_layers = num_layers
-        self.max_len = max_len
-        self.dropout_rate = dropout_rate
+from benchmarks.config import TransformerConfig
 
 class TransformerBlock(nnx.Module):
     def __init__(self, hidden_size: int, num_heads: int, dropout_rate: float, rngs: nnx.Rngs):

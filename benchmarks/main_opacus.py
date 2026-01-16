@@ -5,8 +5,8 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_torch import Transformer, TransformerConfig, generate_dummy_data as generate_transformer_data
-from benchmarks.cnn_torch import CNN, CNNConfig, generate_dummy_data as generate_cnn_data
+from benchmarks.transformer_torch import Transformer, generate_dummy_data
+from benchmarks.config import TransformerConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 
@@ -147,27 +147,16 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark gradients (PyTorch/Opacus).')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
-    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN'],
-                        help='Model to benchmark')
+    parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
+                        help='Model size: small, medium, large')
     args = parser.parse_args()
 
-    if args.model == 'Transformer':
-        config = TransformerConfig(
-            vocab_size=1000,
-            hidden_size=128,
-            num_heads=4,
-            num_layers=2,
-            max_len=64,
-            dropout_rate=0.0
-        )
-    elif args.model == 'CNN':
-        config = CNNConfig(
-            input_shape=(32, 32, 3),
-            num_classes=10,
-            features=(32, 64),
-            kernel_size=(3, 3),
-            hidden_size=128
-        )
+    if args.size == 'small':
+        config = TransformerConfig.small()
+    elif args.size == 'medium':
+        config = TransformerConfig.medium()
+    elif args.size == 'large':
+        config = TransformerConfig.large()
 
     batch_sizes = [16, 32, 64]
     results = []
