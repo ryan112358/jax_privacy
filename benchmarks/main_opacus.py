@@ -5,8 +5,8 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_torch import Transformer, generate_dummy_data
-from benchmarks.config import TransformerConfig
+from benchmarks.transformer_models import TransformerTorch as Transformer, TransformerConfig, generate_dummy_data_torch as generate_dummy_data
+from benchmarks.cnn_models import CNNTorch as CNN, CNNConfig, generate_dummy_data_torch as generate_cnn_data
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 
@@ -33,8 +33,8 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     if model_name == 'Transformer':
         model = Transformer(config).to(device)
         # Generate data
-        d = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=42).to(device)
-        t = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=43).to(device)
+        d = generate_dummy_data(batch_size, config.max_len, config.vocab_size, seed=42).to(device)
+        t = generate_dummy_data(batch_size, config.max_len, config.vocab_size, seed=43).to(device)
         data_batch, targets_batch = d, t
 
         def loss_fn(output, targets):
