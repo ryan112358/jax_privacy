@@ -4,13 +4,16 @@ from flax import nnx
 import time
 import argparse
 import json
+import os
 from benchmarks.transformer import Transformer, TransformerConfig, generate_dummy_data
 from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
 import optax
 
 def benchmark(mode, config, batch_size, num_iterations=50):
-    print(f"Benchmarking mode='{mode}' with config: batch_size={batch_size}")
+    print(f"Benchmarking mode='{mode}' with config: batch_size={batch_size}, "
+          f"seq_len={config.max_len}, vocab={config.vocab_size}, "
+          f"hidden={config.hidden_size}, heads={config.num_heads}, layers={config.num_layers}")
 
     key = jax.random.key(0)
     key_model, key_data, key_noise = jax.random.split(key, 3)
@@ -99,6 +102,11 @@ def benchmark(mode, config, batch_size, num_iterations=50):
     return {
         "mode": mode,
         "batch_size": batch_size,
+        "vocab_size": config.vocab_size,
+        "hidden_size": config.hidden_size,
+        "num_heads": config.num_heads,
+        "num_layers": config.num_layers,
+        "max_len": config.max_len,
         "avg_time": avg_time,
         "throughput": throughput
     }
@@ -107,25 +115,48 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark Transformer gradients.')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
+    parser.add_argument('--batch_size', type=int, required=True, help='Batch size')
+    parser.add_argument('--microbatch_size', type=int, help='Microbatch size for clipped mode')
+    parser.add_argument('--vocab_size', type=int, default=1000)
+    parser.add_argument('--hidden_size', type=int, default=128)
+    parser.add_argument('--num_heads', type=int, default=4)
+    parser.add_argument('--num_layers', type=int, default=2)
+    parser.add_argument('--max_len', type=int, default=64)
+    parser.add_argument('--output_file', type=str, default='results.json')
     args = parser.parse_args()
 
     config = TransformerConfig(
-        vocab_size=1000,
-        hidden_size=128,
-        num_heads=4,
-        num_layers=2,
-        max_len=64,
+        vocab_size=args.vocab_size,
+        hidden_size=args.hidden_size,
+        num_heads=args.num_heads,
+        num_layers=args.num_layers,
+        max_len=args.max_len,
         dropout_rate=0.0
     )
 
-    batch_sizes = [16, 32, 64]
-    results = []
+    # Determine the effective batch size for the run
+    if args.mode == 'clipped' and args.microbatch_size is not None:
+        run_batch_size = args.microbatch_size
+    else:
+        run_batch_size = args.batch_size
 
-    for bs in batch_sizes:
-        res = benchmark(args.mode, config, bs)
-        results.append(res)
+    res = benchmark(args.mode, config, run_batch_size)
 
-    print("RESULTS_JSON=" + json.dumps(results))
+    # Store original args as well if they differ (e.g. if we want to log the "logical" batch size vs microbatch)
+    # But for now, res contains 'batch_size' which is the one used for the run.
+    if args.mode == 'clipped' and args.microbatch_size is not None:
+        res['microbatch_size'] = args.microbatch_size
+        res['logical_batch_size'] = args.batch_size
+    else:
+        res['microbatch_size'] = None
+        res['logical_batch_size'] = args.batch_size
+
+    # Append to results file
+    # We will use JSONL format (one JSON per line) to easily append
+    with open(args.output_file, 'a') as f:
+        f.write(json.dumps(res) + '\n')
+
+    print(f"Result appended to {args.output_file}")
 
 if __name__ == "__main__":
     main()
