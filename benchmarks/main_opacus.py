@@ -5,9 +5,10 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_models import TransformerTorch as Transformer, TransformerConfig, generate_dummy_data_torch as generate_dummy_data
-from benchmarks.cnn_models import CNNTorch as CNN, CNNConfig, generate_dummy_data_torch as generate_cnn_data
-from benchmarks.diffusion import TorchDiffusion, DiffusionConfig, generate_dummy_data_torch
+from benchmarks.transformer_torch import Transformer, generate_dummy_data
+from benchmarks.cnn_torch import CNN, generate_dummy_data as generate_cnn_data
+from benchmarks.state_space import StateSpaceModelTorch, StateSpaceConfig, generate_dummy_data as generate_state_space_data
+from benchmarks.config import TransformerConfig, CNNConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 
@@ -48,16 +49,13 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
         def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output, targets)
 
-    elif model_name == 'Diffusion':
-        model = TorchDiffusion(config).to(device)
-        d, t = generate_dummy_data_torch(batch_size, config, seed=42)
-        # d is (x, t_emb), t is noise
-        x_in, t_in = d
-        data_batch = (x_in.to(device), t_in.to(device))
-        targets_batch = t.to(device)
+    elif model_name == 'StateSpace':
+        model = StateSpaceModelTorch(config).to(device)
+        d, t = generate_state_space_data(batch_size, config.max_len, config.vocab_size, seed=42)
+        data_batch, targets_batch = d.to(device), t.to(device)
 
         def loss_fn(output, targets):
-             return nn.MSELoss()(output, targets)
+             return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1))
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
@@ -188,7 +186,7 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark gradients (PyTorch/Opacus).')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
-    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN', 'Diffusion'],
+    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN', 'StateSpace'],
                         help='Model to benchmark')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size for CNN/Diffusion')
@@ -202,16 +200,13 @@ def main():
 
     args = parser.parse_args()
 
-    config = None
     if args.model == 'Transformer':
-        config = TransformerConfig(
-            vocab_size=args.vocab_size,
-            hidden_size=args.hidden_size,
-            num_heads=args.num_heads,
-            num_layers=args.num_layers,
-            max_len=args.max_len,
-            dropout_rate=0.0
-        )
+        if args.size == 'small':
+            config = TransformerConfig.small()
+        elif args.size == 'medium':
+            config = TransformerConfig.medium()
+        elif args.size == 'large':
+            config = TransformerConfig.large()
     elif args.model == 'CNN':
         if args.size == 'small':
             config = CNNConfig.small()
@@ -219,21 +214,15 @@ def main():
             config = CNNConfig.medium()
         elif args.size == 'large':
             config = CNNConfig.large()
-    elif args.model == 'Diffusion':
+    elif args.model == 'StateSpace':
         if args.size == 'small':
-            config = DiffusionConfig.small()
+            config = StateSpaceConfig.small()
         elif args.size == 'medium':
-            config = DiffusionConfig.medium()
+            config = StateSpaceConfig.medium()
         elif args.size == 'large':
-            config = DiffusionConfig.large()
-
-    if config is None:
-        raise ValueError(f"Invalid model or size configuration: {args.model}, {args.size}")
-
-    if args.batch_size:
-        batch_sizes = [args.batch_size]
+            config = StateSpaceConfig.large()
     else:
-        batch_sizes = [16, 32, 64]
+        raise ValueError(f"Unknown model: {args.model}")
 
     results = []
 

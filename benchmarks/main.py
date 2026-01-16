@@ -6,14 +6,15 @@ import argparse
 import json
 import functools
 import os
-from benchmarks.transformer_models import Transformer, TransformerConfig, generate_dummy_data as generate_transformer_data
-from benchmarks.cnn_models import CNN, CNNConfig, generate_dummy_data as generate_cnn_data
-from benchmarks.diffusion import FlaxDiffusion, DiffusionConfig, generate_dummy_data_flax
+from benchmarks.transformer import Transformer, generate_dummy_data as generate_transformer_data
+from benchmarks.cnn import CNN, generate_dummy_data as generate_cnn_data
+from benchmarks.state_space import StateSpaceModel, StateSpaceConfig, generate_dummy_data as generate_state_space_data
+from benchmarks.config import TransformerConfig, CNNConfig
 from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
 import optax
 
-def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, num_iterations=50, microbatch_size=None):
+def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, microbatch_size=None, num_iterations=50):
     print(f"Benchmarking with config: batch_size={batch_size}, model={model_class.__name__}")
 
     key = jax.random.key(0)
@@ -114,12 +115,12 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
             "features": list(config.features),
             "hidden_size": config.hidden_size
         })
-    elif isinstance(config, DiffusionConfig):
+    elif isinstance(config, StateSpaceConfig):
         res.update({
-            "image_size": config.image_size,
-            "channels": config.channels,
+            "vocab_size": config.vocab_size,
             "hidden_size": config.hidden_size,
-            "num_layers": config.num_layers
+            "num_layers": config.num_layers,
+            "max_len": config.max_len
         })
 
     return res
@@ -128,8 +129,8 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark Transformer and CNN gradients.')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
-    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn', 'diffusion'],
-                        help='Model to benchmark: transformer, cnn, or diffusion')
+    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn', 'state_space'],
+                        help='Model to benchmark: transformer, cnn, or state_space')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size: small, medium, large')
 
@@ -166,17 +167,17 @@ def main():
         def data_gen_fn(bs, cfg, key):
             return generate_cnn_data(bs, cfg.input_shape, cfg.num_classes, key)
 
-    elif args.model == 'diffusion':
+    elif args.model == 'state_space':
         if args.size == 'small':
-            config = DiffusionConfig.small()
+            config = StateSpaceConfig.small()
         elif args.size == 'medium':
-            config = DiffusionConfig.medium()
+            config = StateSpaceConfig.medium()
         elif args.size == 'large':
-            config = DiffusionConfig.large()
+            config = StateSpaceConfig.large()
 
-        model_class = FlaxDiffusion
+        model_class = StateSpaceModel
         def data_gen_fn(bs, cfg, key):
-             return generate_dummy_data_flax(bs, cfg, key)
+            return generate_state_space_data(bs, cfg.max_len, cfg.vocab_size, key=key)
 
     else:
         raise ValueError(f"Unknown model: {args.model}")
@@ -198,7 +199,7 @@ def main():
              optax.adamw(learning_rate=1e-4)
          )
 
-    res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, args.batch_size, microbatch_size=args.microbatch_size)
+    res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, args.batch_size, args.microbatch_size)
     res['mode'] = args.mode
     res['microbatch_size'] = args.microbatch_size
 
