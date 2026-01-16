@@ -8,6 +8,7 @@ import functools
 import os
 from benchmarks.transformer import Transformer, generate_dummy_data as generate_transformer_data
 from benchmarks.cnn import CNN, generate_dummy_data as generate_cnn_data
+from benchmarks.diffusion import FlaxDiffusion, DiffusionConfig, generate_dummy_data_flax
 from benchmarks.config import TransformerConfig, CNNConfig
 from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
@@ -37,18 +38,25 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
     def loss_fn(params, batch):
         m = nnx.merge(graphdef, params, others)
         x, y = batch
-        # Handle 1D input if necessary
-        if x.ndim == 1:
-            x = jnp.expand_dims(x, 0)
 
-        logits = m(x)
+        if isinstance(x, (tuple, list)):
+            logits = m(*x)
+        else:
+            # Handle 1D input if necessary
+            if hasattr(x, 'ndim') and x.ndim == 1:
+                x = jnp.expand_dims(x, 0)
+            logits = m(x)
 
-        if logits.ndim == 3: # Sequence task (Transformer)
-            logits = logits.reshape(-1, logits.shape[-1])
-            y = y.reshape(-1)
+        if jnp.issubdtype(y.dtype, jnp.floating):
+             # MSE loss for diffusion
+             loss = jnp.mean((logits - y) ** 2)
+        else:
+            if logits.ndim == 3: # Sequence task (Transformer)
+                logits = logits.reshape(-1, logits.shape[-1])
+                y = y.reshape(-1)
 
-        one_hot = jax.nn.one_hot(y, logits.shape[-1])
-        loss = optax.softmax_cross_entropy(logits=logits, labels=one_hot).mean()
+            one_hot = jax.nn.one_hot(y, logits.shape[-1])
+            loss = optax.softmax_cross_entropy(logits=logits, labels=one_hot).mean()
         return loss
 
     if isinstance(grad_fn, functools.partial) and grad_fn.func == clipped_grad:
@@ -83,7 +91,6 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
 
     res = {
         "batch_size": batch_size,
-        "microbatch_size": microbatch_size,
         "avg_time": avg_time,
         "throughput": throughput,
         "model": model_class.__name__
@@ -105,6 +112,13 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
             "features": list(config.features),
             "hidden_size": config.hidden_size
         })
+    elif isinstance(config, DiffusionConfig):
+        res.update({
+            "image_size": config.image_size,
+            "channels": config.channels,
+            "hidden_size": config.hidden_size,
+            "num_layers": config.num_layers
+        })
 
     return res
 
@@ -112,8 +126,8 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark Transformer and CNN gradients.')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
-    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn'],
-                        help='Model to benchmark: transformer or cnn')
+    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn', 'diffusion'],
+                        help='Model to benchmark: transformer, cnn, or diffusion')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size: small, medium, large')
 
@@ -149,6 +163,18 @@ def main():
         model_class = CNN
         def data_gen_fn(bs, cfg, key):
             return generate_cnn_data(bs, cfg.input_shape, cfg.num_classes, key)
+
+    elif args.model == 'diffusion':
+        if args.size == 'small':
+            config = DiffusionConfig.small()
+        elif args.size == 'medium':
+            config = DiffusionConfig.medium()
+        elif args.size == 'large':
+            config = DiffusionConfig.large()
+
+        model_class = FlaxDiffusion
+        def data_gen_fn(bs, cfg, key):
+             return generate_dummy_data_flax(bs, cfg, key)
 
     else:
         raise ValueError(f"Unknown model: {args.model}")
