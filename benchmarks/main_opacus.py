@@ -5,7 +5,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_torch import Transformer, generate_dummy_data
+from benchmarks.transformer_torch import Transformer, generate_dummy_data as generate_transformer_data
 from benchmarks.config import TransformerConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
@@ -25,7 +25,7 @@ class BenchmarkDataset(TensorDataset):
         real_idx = index % self.original_len
         return self.data[real_idx], self.targets[real_idx]
 
-def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
+def run_benchmark(mode, model_name, config, batch_size, size_arg='small', num_iterations=50):
     print(f"Benchmarking model='{model_name}', mode='{mode}' with config: batch_size={batch_size}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -41,8 +41,17 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
              return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1))
 
     elif model_name == 'CNN':
-        model = CNN(config).to(device)
-        d, t = generate_cnn_data(batch_size, config.input_shape, config.num_classes, seed=42)
+        from benchmarks.cnn_models import CNNTorch, generate_dummy_data_torch, CNNConfig as CNNConfigModels
+        # Convert TransformerConfig to CNNConfig if needed, or use separate config logic
+        # For simplicity, we'll re-init config if model is CNN
+        if isinstance(config, TransformerConfig):
+             if size_arg == 'small': config = CNNConfigModels.small()
+             elif size_arg == 'medium': config = CNNConfigModels.medium()
+             elif size_arg == 'large': config = CNNConfigModels.large()
+             else: config = CNNConfigModels.small() # Fallback
+
+        model = CNNTorch(config).to(device)
+        d, t = generate_dummy_data_torch(batch_size, config.input_shape, config.num_classes, seed=42)
         data_batch, targets_batch = d.to(device), t.to(device)
 
         def loss_fn(output, targets):
@@ -149,6 +158,8 @@ def main():
                         help='Benchmark mode: standard or clipped')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size: small, medium, large')
+    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN'],
+                        help='Model to benchmark')
     args = parser.parse_args()
 
     if args.size == 'small':
@@ -162,7 +173,7 @@ def main():
     results = []
 
     for bs in batch_sizes:
-        res = run_benchmark(args.mode, args.model, config, bs)
+        res = run_benchmark(args.mode, args.model, config, bs, args.size)
         results.append(res)
 
     print("RESULTS_JSON=" + json.dumps(results))
