@@ -5,25 +5,26 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_torch import Transformer, TransformerConfig, generate_dummy_data as generate_transformer_data
-from benchmarks.cnn_torch import CNN, CNNConfig, generate_dummy_data as generate_cnn_data
+from benchmarks.transformer_torch import Transformer, generate_dummy_data as generate_transformer_data
+from benchmarks.diffusion import TorchDiffusion, DiffusionConfig, generate_dummy_data_torch
+from benchmarks.cnn_torch import CNN, generate_dummy_data as generate_cnn_data
+from benchmarks.config import TransformerConfig, CNNConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 
 class BenchmarkDataset(TensorDataset):
-    def __init__(self, data, targets, total_length):
-        super().__init__(data, targets)
-        self.data = data
-        self.targets = targets
+    def __init__(self, *tensors, total_length):
+        super().__init__(*tensors)
+        self.tensors = tensors
         self.total_length = total_length
-        self.original_len = data.size(0)
+        self.original_len = tensors[0].size(0)
 
     def __len__(self):
         return self.total_length
 
     def __getitem__(self, index):
         real_idx = index % self.original_len
-        return self.data[real_idx], self.targets[real_idx]
+        return tuple(tensor[real_idx] for tensor in self.tensors)
 
 def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     print(f"Benchmarking model='{model_name}', mode='{mode}' with config: batch_size={batch_size}")
@@ -47,6 +48,17 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
 
         def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output, targets)
+
+    elif model_name == 'Diffusion':
+        model = TorchDiffusion(config).to(device)
+        d, t = generate_dummy_data_torch(batch_size, config, seed=42)
+        # d is (x, t_emb), t is noise
+        x_in, t_in = d
+        data_batch = (x_in.to(device), t_in.to(device))
+        targets_batch = t.to(device)
+
+        def loss_fn(output, targets):
+             return nn.MSELoss()(output, targets)
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
@@ -60,7 +72,10 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     if mode == 'standard':
         # Warmup
         optimizer.zero_grad()
-        output = model(data_batch)
+        if isinstance(data_batch, (list, tuple)):
+            output = model(*data_batch)
+        else:
+            output = model(data_batch)
         loss = loss_fn(output, targets_batch)
         loss.backward()
         optimizer.step()
@@ -70,7 +85,10 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
         start_time = time.time()
         for _ in range(num_iterations):
             optimizer.zero_grad()
-            output = model(data_batch)
+            if isinstance(data_batch, (list, tuple)):
+                output = model(*data_batch)
+            else:
+                output = model(data_batch)
             loss = loss_fn(output, targets_batch)
             loss.backward()
             optimizer.step()
@@ -80,7 +98,12 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
         end_time = time.time()
 
     elif mode == 'clipped':
-        dataset = BenchmarkDataset(data_batch, targets_batch, batch_size * (num_iterations + 10))
+        if isinstance(data_batch, (list, tuple)):
+            all_tensors = list(data_batch) + [targets_batch]
+        else:
+            all_tensors = [data_batch, targets_batch]
+
+        dataset = BenchmarkDataset(*all_tensors, total_length=batch_size * (num_iterations + 10))
         dataloader = DataLoader(dataset, batch_size=batch_size)
 
         privacy_engine = PrivacyEngine()
@@ -98,10 +121,24 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
 
         iter_loader = iter(dataloader)
 
+        def unpack_batch(batch):
+            if len(batch) == 2:
+                return batch[0], batch[1]
+            elif len(batch) > 2:
+                # Assume last is target, rest are inputs
+                return batch[:-1], batch[-1]
+            else:
+                 raise ValueError("Unexpected batch size")
+
         # Warmup
-        d, t = next(iter_loader)
+        batch_tensors = next(iter_loader)
+        d, t = unpack_batch(batch_tensors)
+
         optimizer.zero_grad()
-        output = model(d)
+        if isinstance(d, (list, tuple)):
+            output = model(*d)
+        else:
+            output = model(d)
         loss = loss_fn(output, t)
         loss.backward()
         optimizer.step()
@@ -112,12 +149,17 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
         start_time = time.time()
         for _ in range(num_iterations):
             try:
-                d, t = next(iter_loader)
+                batch_tensors = next(iter_loader)
             except StopIteration:
                 break
 
+            d, t = unpack_batch(batch_tensors)
+
             optimizer.zero_grad()
-            output = model(d)
+            if isinstance(d, (list, tuple)):
+                output = model(*d)
+            else:
+                output = model(d)
             loss = loss_fn(output, t)
             loss.backward()
             optimizer.step()
@@ -147,7 +189,7 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark gradients (PyTorch/Opacus).')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
-    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN'],
+    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN', 'Diffusion'],
                         help='Model to benchmark')
     parser.add_argument('--batch_size', type=int, help='Batch size (optional, overrides default list)')
     parser.add_argument('--output_file', type=str, help='Output JSON file to append results')
@@ -159,6 +201,7 @@ def main():
 
     args = parser.parse_args()
 
+    config = None
     if args.model == 'Transformer':
         config = TransformerConfig(
             vocab_size=args.vocab_size,
@@ -169,13 +212,22 @@ def main():
             dropout_rate=0.0
         )
     elif args.model == 'CNN':
-        config = CNNConfig(
-            input_shape=(32, 32, 3),
-            num_classes=10,
-            features=(32, 64),
-            kernel_size=(3, 3),
-            hidden_size=128
-        )
+        if args.size == 'small':
+            config = CNNConfig.small()
+        elif args.size == 'medium':
+            config = CNNConfig.medium()
+        elif args.size == 'large':
+            config = CNNConfig.large()
+    elif args.model == 'Diffusion':
+        if args.size == 'small':
+            config = DiffusionConfig.small()
+        elif args.size == 'medium':
+            config = DiffusionConfig.medium()
+        elif args.size == 'large':
+            config = DiffusionConfig.large()
+
+    if config is None:
+        raise ValueError(f"Invalid model or size configuration: {args.model}, {args.size}")
 
     if args.batch_size:
         batch_sizes = [args.batch_size]
