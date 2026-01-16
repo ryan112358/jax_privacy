@@ -191,18 +191,26 @@ def main():
                         help='Benchmark mode: standard or clipped')
     parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN', 'Diffusion'],
                         help='Model to benchmark')
-    parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
-                        help='Model size: small, medium, large')
+    parser.add_argument('--batch_size', type=int, help='Batch size (optional, overrides default list)')
+    parser.add_argument('--output_file', type=str, help='Output JSON file to append results')
+    parser.add_argument('--max_len', type=int, default=64, help='Max sequence length for Transformer')
+    parser.add_argument('--vocab_size', type=int, default=1000)
+    parser.add_argument('--hidden_size', type=int, default=128)
+    parser.add_argument('--num_heads', type=int, default=4)
+    parser.add_argument('--num_layers', type=int, default=2)
+
     args = parser.parse_args()
 
     config = None
     if args.model == 'Transformer':
-        if args.size == 'small':
-            config = TransformerConfig.small()
-        elif args.size == 'medium':
-            config = TransformerConfig.medium()
-        elif args.size == 'large':
-            config = TransformerConfig.large()
+        config = TransformerConfig(
+            vocab_size=args.vocab_size,
+            hidden_size=args.hidden_size,
+            num_heads=args.num_heads,
+            num_layers=args.num_layers,
+            max_len=args.max_len,
+            dropout_rate=0.0
+        )
     elif args.model == 'CNN':
         if args.size == 'small':
             config = CNNConfig.small()
@@ -221,14 +229,29 @@ def main():
     if config is None:
         raise ValueError(f"Invalid model or size configuration: {args.model}, {args.size}")
 
-    batch_sizes = [16, 32, 64]
+    if args.batch_size:
+        batch_sizes = [args.batch_size]
+    else:
+        batch_sizes = [16, 32, 64]
+
     results = []
 
     for bs in batch_sizes:
         res = run_benchmark(args.mode, args.model, config, bs)
+
+        # Add max_len to result if Transformer, to match JAX output
+        if args.model == 'Transformer':
+            res['max_len'] = args.max_len
+
         results.append(res)
 
-    print("RESULTS_JSON=" + json.dumps(results))
+        if args.output_file:
+            with open(args.output_file, 'a') as f:
+                f.write(json.dumps(res) + '\n')
+            print(f"Result appended to {args.output_file}")
+
+    if not args.output_file:
+        print("RESULTS_JSON=" + json.dumps(results))
 
 if __name__ == "__main__":
     main()
