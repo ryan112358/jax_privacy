@@ -6,81 +6,89 @@ import argparse
 import json
 from benchmarks.transformer import Transformer, TransformerConfig, generate_dummy_data
 from jax_privacy.clipping import clipped_grad
+from jax_privacy import noise_addition
 import optax
 
-def benchmark(mode, config, batch_size, num_iterations=10):
+def benchmark(mode, config, batch_size, num_iterations=50):
     print(f"Benchmarking mode='{mode}' with config: batch_size={batch_size}")
 
     key = jax.random.key(0)
-    key_model, key_data = jax.random.split(key)
+    key_model, key_data, key_noise = jax.random.split(key, 3)
 
     model = Transformer(config, rngs=nnx.Rngs(key_model))
 
-    # Split model
-    graphdef, state, others = nnx.split(model, nnx.Param, ...)
+    graphdef, params, others = nnx.split(model, nnx.Param, ...)
 
-    def loss_fn(state, params):
-        """
-        Unified loss function for both standard and clipped gradients.
+    optimizer = optax.adamw(learning_rate=1e-4)
+    opt_state = optimizer.init(params)
 
-        Args:
-            state: The differentiable model parameters (and potentially other state).
-            params: The batch of data (inputs, targets).
-        """
-        # Merge state back into the model graph
-        m = nnx.merge(graphdef, state, others)
+    data = generate_dummy_data(batch_size, config.max_len, config.vocab_size, key_data)
+    targets = generate_dummy_data(batch_size, config.max_len, config.vocab_size, key_data)
+    batch = (data, targets)
 
-        x, y = params
-
-        # Check rank of x. If rank 1 (seq_len), expand to (1, seq_len)
+    def loss_fn(params, batch):
+        m = nnx.merge(graphdef, params, others)
+        x, y = batch
         if x.ndim == 1:
             x = jnp.expand_dims(x, 0)
-
         logits = m(x)
-
-        # If output is (1, seq_len, vocab), reshape correctly
         logits = logits.reshape(-1, logits.shape[-1])
         y = y.reshape(-1)
         one_hot = jax.nn.one_hot(y, logits.shape[-1])
         loss = optax.softmax_cross_entropy(logits=logits, labels=one_hot).mean()
         return loss
 
-    # Generate dummy data
-    data = generate_dummy_data(batch_size, config.max_len, config.vocab_size, key_data)
-    targets = generate_dummy_data(batch_size, config.max_len, config.vocab_size, key_data)
-    batch = (data, targets)
-
     if mode == 'standard':
-        # jax.grad defaults: argnums=0 (state).
         grad_fn = jax.grad(loss_fn)
 
         @jax.jit
-        def train_step(state, batch):
-            return grad_fn(state, batch)
+        def train_step(params, opt_state, batch):
+            grads = grad_fn(params, batch)
+            updates, new_opt_state = optimizer.update(grads, opt_state, params)
+            new_params = optax.apply_updates(params, updates)
+            return new_params, new_opt_state
+
+        # Warmup
+        params, opt_state = train_step(params, opt_state, batch)
+        jax.block_until_ready(params)
+
+        start_time = time.time()
+        for _ in range(num_iterations):
+            params, opt_state = train_step(params, opt_state, batch)
+        jax.block_until_ready(params)
+        end_time = time.time()
 
     elif mode == 'clipped':
-        # clipped_grad defaults: argnums=0 (state), batch_argnums=1 (params/batch).
+        privatizer = noise_addition.gaussian_privatizer(stddev=0.1, prng_key=key_noise)
+        noise_state = privatizer.init(params)
+
         grad_clipped = clipped_grad(
             loss_fn,
             l2_clip_norm=1.0,
             keep_batch_dim=True,
+            normalize_by=batch_size
         )
 
         @jax.jit
-        def train_step(state, batch):
-            return grad_clipped(state, batch)
+        def train_step(params, opt_state, noise_state, batch):
+            grads = grad_clipped(params, batch)
+            noisy_grads, new_noise_state = privatizer.update(grads, noise_state)
+            updates, new_opt_state = optimizer.update(noisy_grads, opt_state, params)
+            new_params = optax.apply_updates(params, updates)
+            return new_params, new_opt_state, new_noise_state
+
+        # Warmup
+        params, opt_state, noise_state = train_step(params, opt_state, noise_state, batch)
+        jax.block_until_ready(params)
+
+        start_time = time.time()
+        for _ in range(num_iterations):
+            params, opt_state, noise_state = train_step(params, opt_state, noise_state, batch)
+        jax.block_until_ready(params)
+        end_time = time.time()
+
     else:
         raise ValueError(f"Unknown mode: {mode}")
-
-    # Warmup
-    grads = train_step(state, batch)
-    jax.block_until_ready(grads)
-
-    start_time = time.time()
-    for _ in range(num_iterations):
-        grads = train_step(state, batch)
-        jax.block_until_ready(grads)
-    end_time = time.time()
 
     total_time = end_time - start_time
     avg_time = total_time / num_iterations
@@ -117,7 +125,6 @@ def main():
         res = benchmark(args.mode, config, bs)
         results.append(res)
 
-    # Print results as JSON for easy parsing or just reading
     print("RESULTS_JSON=" + json.dumps(results))
 
 if __name__ == "__main__":
