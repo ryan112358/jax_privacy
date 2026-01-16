@@ -46,3 +46,54 @@
 ### Model Size Impact
 *   **Small Model (32x32)**: Standard is ~5x faster than clipped.
 *   **Medium Model (64x64)**: (Only standard run completed in time, but we can infer similar or larger gaps). The standard run itself slowed down significantly to ~70 samples/s due to increased model complexity.
+
+
+## JAXPR Analysis
+
+To investigate the performance difference, we captured the JAXPR (JAX's intermediate representation) for both the standard and clipped gradient computations.
+
+### Standard Training JAXPR
+
+In standard training, the gradient is computed on the mean of the loss. The key observation is how gradients for the weights (convolution kernels) are computed.
+
+```
+dl:f32[3,3,32,64] = conv_general_dilated[
+  batch_group_count=1
+  dimension_numbers=ConvDimensionNumbers(lhs_spec=(3, 0, 1, 2), rhs_spec=(3, 0, 1, 2), out_spec=(2, 3, 0, 1))
+  feature_group_count=1
+  ...
+] r dh
+```
+
+Here, `dl` represents the gradient with respect to the weights of one of the layers.
+*   **Structure**: This is a single convolution operation that reduces over the batch dimension immediately. The input `r` (activations) and `dh` (gradients from the layer above) both have the batch dimension.
+*   **Efficiency**: The reduction happens *inside* this `conv_general_dilated` call (or matrix multiplication). This is highly efficient because it avoids storing per-sample gradients. It accumulates the sum directly.
+
+### Clipped Training JAXPR
+
+In clipped training (using `jax_privacy.clipped_grad`), the operation is vectorized over the batch dimension using `vmap`.
+
+```
+ga:f32[3,3,32,128] = conv_general_dilated[
+  batch_group_count=1
+  dimension_numbers=ConvDimensionNumbers(lhs_spec=(3, 0, 1, 2), rhs_spec=(3, 0, 1, 2), out_spec=(2, 3, 0, 1))
+  feature_group_count=2
+  ...
+] fy fz
+```
+
+At first glance, this looks similar, but notice the `feature_group_count=2` (which corresponds to the batch size in our JAXPR capture experiment).
+*   **Structure**: The `vmap` transformation pushes the batch dimension into the `feature_group_count` (or batch_group_count depending on configuration) of the convolution.
+*   **Output Size**: The output `ga` has shape `[3, 3, 32, 128]`. In our tiny experiment, `128` is actually `64 (features) * 2 (batch_size)`. This means it is producing `batch_size` separate gradients for the weights.
+*   **Overhead**:
+    1.  **Memory**: Instead of outputting one weight gradient tensor `(K, K, Cin, Cout)`, it outputs `(Batch, K, K, Cin, Cout)`. This drastically increases memory write bandwidth.
+    2.  **Computation**: While the FLOP count is similar, the lack of immediate reduction means we lose the arithmetic intensity benefits of the standard "Batch-to-Weight" gradient convolution.
+    3.  **Post-Processing**: After producing these per-sample gradients, the system must compute the norm of *each* one (reading them all back), clip them, and then sum them (reading and writing again).
+
+### Conclusion
+
+The performance gap is caused by the fundamental requirement of DP-SGD to access per-sample gradients.
+1.  **Standard Backprop**: `Activations (B) x Gradients (B) -> Summed Weight Gradient (1)` (Reduction happens during compute).
+2.  **Clipped Backprop**: `Activations (B) x Gradients (B) -> Per-Sample Weight Gradients (B) -> Clip -> Sum`.
+
+The intermediate step of materializing `B` weight gradients creates a massive memory bottleneck, especially for CNNs where weights can be large and the convolution operation is computationally intensive. The `microbatch_size` argument mitigates the peak memory usage but does not remove the fundamental need to materialize these gradients before reduction.
