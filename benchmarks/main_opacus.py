@@ -6,7 +6,9 @@ import time
 import argparse
 import json
 from benchmarks.transformer_torch import Transformer, generate_dummy_data
-from benchmarks.config import TransformerConfig
+from benchmarks.cnn_torch import CNN, generate_dummy_data as generate_cnn_data
+from benchmarks.state_space import StateSpaceModelTorch, StateSpaceConfig, generate_dummy_data as generate_state_space_data
+from benchmarks.config import TransformerConfig, CNNConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 
@@ -47,6 +49,14 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
 
         def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output, targets)
+
+    elif model_name == 'StateSpace':
+        model = StateSpaceModelTorch(config).to(device)
+        d, t = generate_state_space_data(batch_size, config.max_len, config.vocab_size, seed=42)
+        data_batch, targets_batch = d.to(device), t.to(device)
+
+        def loss_fn(output, targets):
+             return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1))
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
@@ -147,16 +157,35 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark gradients (PyTorch/Opacus).')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
+    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN', 'StateSpace'],
+                        help='Model to benchmark')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size: small, medium, large')
     args = parser.parse_args()
 
-    if args.size == 'small':
-        config = TransformerConfig.small()
-    elif args.size == 'medium':
-        config = TransformerConfig.medium()
-    elif args.size == 'large':
-        config = TransformerConfig.large()
+    if args.model == 'Transformer':
+        if args.size == 'small':
+            config = TransformerConfig.small()
+        elif args.size == 'medium':
+            config = TransformerConfig.medium()
+        elif args.size == 'large':
+            config = TransformerConfig.large()
+    elif args.model == 'CNN':
+        if args.size == 'small':
+            config = CNNConfig.small()
+        elif args.size == 'medium':
+            config = CNNConfig.medium()
+        elif args.size == 'large':
+            config = CNNConfig.large()
+    elif args.model == 'StateSpace':
+        if args.size == 'small':
+            config = StateSpaceConfig.small()
+        elif args.size == 'medium':
+            config = StateSpaceConfig.medium()
+        elif args.size == 'large':
+            config = StateSpaceConfig.large()
+    else:
+        raise ValueError(f"Unknown model: {args.model}")
 
     batch_sizes = [16, 32, 64]
     results = []
