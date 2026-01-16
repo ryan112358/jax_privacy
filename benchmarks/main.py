@@ -4,31 +4,31 @@ from flax import nnx
 import time
 import argparse
 import json
-from benchmarks.transformer import Transformer, TransformerConfig, generate_dummy_data
+from benchmarks.transformer import Transformer, TransformerConfig, generate_dummy_data as generate_transformer_data
+from benchmarks.cnn import CNN, CNNConfig, generate_dummy_data as generate_cnn_data
 from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
 import optax
 
-def benchmark(mode, config, batch_size, num_iterations=50):
+def benchmark(model_class, data_gen_fn, mode, config, batch_size, num_iterations=50):
     print(f"Benchmarking mode='{mode}' with config: batch_size={batch_size}")
 
     key = jax.random.key(0)
     key_model, key_data, key_noise = jax.random.split(key, 3)
 
-    model = Transformer(config, rngs=nnx.Rngs(key_model))
+    model = model_class(config, rngs=nnx.Rngs(key_model))
 
     graphdef, params, others = nnx.split(model, nnx.Param, ...)
 
     optimizer = optax.adamw(learning_rate=1e-4)
     opt_state = optimizer.init(params)
 
-    data = generate_dummy_data(batch_size, config.max_len, config.vocab_size, key_data)
-    targets = generate_dummy_data(batch_size, config.max_len, config.vocab_size, key_data)
-    batch = (data, targets)
+    batch = data_gen_fn(batch_size, config, key_data)
 
     def loss_fn(params, batch):
         m = nnx.merge(graphdef, params, others)
         x, y = batch
+        # Handle 1D input if necessary (though not expected with current generators)
         if x.ndim == 1:
             x = jnp.expand_dims(x, 0)
         logits = m(x)
@@ -104,25 +104,48 @@ def benchmark(mode, config, batch_size, num_iterations=50):
     }
 
 def main():
-    parser = argparse.ArgumentParser(description='Benchmark Transformer gradients.')
+    parser = argparse.ArgumentParser(description='Benchmark Transformer and CNN gradients.')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
+    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn'],
+                        help='Model to benchmark: transformer or cnn')
     args = parser.parse_args()
 
-    config = TransformerConfig(
-        vocab_size=1000,
-        hidden_size=128,
-        num_heads=4,
-        num_layers=2,
-        max_len=64,
-        dropout_rate=0.0
-    )
+    if args.model == 'transformer':
+        config = TransformerConfig(
+            vocab_size=1000,
+            hidden_size=128,
+            num_heads=4,
+            num_layers=2,
+            max_len=64,
+            dropout_rate=0.0
+        )
+        model_class = Transformer
+        def data_gen_fn(bs, cfg, key):
+            data = generate_transformer_data(bs, cfg.max_len, cfg.vocab_size, key)
+            targets = generate_transformer_data(bs, cfg.max_len, cfg.vocab_size, key)
+            return (data, targets)
+
+    elif args.model == 'cnn':
+        config = CNNConfig(
+            input_shape=(32, 32, 3),
+            num_classes=10,
+            features=(32, 64),
+            kernel_size=(3, 3),
+            hidden_size=128
+        )
+        model_class = CNN
+        def data_gen_fn(bs, cfg, key):
+            return generate_cnn_data(bs, cfg.input_shape, cfg.num_classes, key)
+
+    else:
+        raise ValueError(f"Unknown model: {args.model}")
 
     batch_sizes = [16, 32, 64]
     results = []
 
     for bs in batch_sizes:
-        res = benchmark(args.mode, config, bs)
+        res = benchmark(model_class, data_gen_fn, args.mode, config, bs)
         results.append(res)
 
     print("RESULTS_JSON=" + json.dumps(results))
