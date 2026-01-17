@@ -5,12 +5,12 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer_torch import Transformer, generate_dummy_data
-from benchmarks.cnn_torch import CNN, generate_dummy_data as generate_cnn_data
+from benchmarks.transformer import TransformerTorch, TransformerConfig, generate_dummy_data as generate_transformer_data
+from benchmarks.cnn import CNNTorch, CNNConfig, generate_dummy_data as generate_cnn_data
 from benchmarks.state_space import StateSpaceModelTorch, StateSpaceConfig, generate_dummy_data as generate_state_space_data
-from benchmarks.config import TransformerConfig, CNNConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
+import numpy as np
 
 class BenchmarkDataset(TensorDataset):
     def __init__(self, *tensors, total_length):
@@ -32,27 +32,42 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if model_name == 'Transformer':
-        model = Transformer(config).to(device)
+        model = TransformerTorch(config).to(device)
         # Generate data
-        d = generate_dummy_data(batch_size, config.max_len, config.vocab_size, seed=42).to(device)
-        t = generate_dummy_data(batch_size, config.max_len, config.vocab_size, seed=43).to(device)
+        d_np = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=42)
+        t_np = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=43)
+
+        d = torch.from_numpy(d_np).to(device)
+        t = torch.from_numpy(t_np).to(device)
         data_batch, targets_batch = d, t
 
         def loss_fn(output, targets):
-             return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1))
+             return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1).long())
 
     elif model_name == 'CNN':
-        model = CNN(config).to(device)
-        d, t = generate_cnn_data(batch_size, config.input_shape, config.num_classes, seed=42)
-        data_batch, targets_batch = d.to(device), t.to(device)
+        model = CNNTorch(config).to(device)
+        d_np, t_np = generate_cnn_data(batch_size, config.input_shape, config.num_classes, seed=42)
+
+        # Transpose image to NCHW for PyTorch
+        # d_np is NHWC from generate_dummy_data
+        d_np = np.transpose(d_np, (0, 3, 1, 2))
+
+        d = torch.from_numpy(d_np).to(device)
+        t = torch.from_numpy(t_np).long().to(device)
+
+        data_batch, targets_batch = d, t
 
         def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output, targets)
 
     elif model_name == 'StateSpace':
         model = StateSpaceModelTorch(config).to(device)
-        d, t = generate_state_space_data(batch_size, config.max_len, config.vocab_size, seed=42)
-        data_batch, targets_batch = d.to(device), t.to(device)
+        d_np, t_np = generate_state_space_data(batch_size, config.max_len, config.vocab_size, seed=42)
+
+        d = torch.from_numpy(d_np).to(device)
+        t = torch.from_numpy(t_np).long().to(device)
+
+        data_batch, targets_batch = d, t
 
         def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1))
@@ -201,28 +216,19 @@ def main():
     args = parser.parse_args()
 
     if args.model == 'Transformer':
-        if args.size == 'small':
-            config = TransformerConfig.small()
-        elif args.size == 'medium':
-            config = TransformerConfig.medium()
-        elif args.size == 'large':
-            config = TransformerConfig.large()
+        config = TransformerConfig.build(args.size)
     elif args.model == 'CNN':
-        if args.size == 'small':
-            config = CNNConfig.small()
-        elif args.size == 'medium':
-            config = CNNConfig.medium()
-        elif args.size == 'large':
-            config = CNNConfig.large()
+        config = CNNConfig.build(args.size)
     elif args.model == 'StateSpace':
-        if args.size == 'small':
-            config = StateSpaceConfig.small()
-        elif args.size == 'medium':
-            config = StateSpaceConfig.medium()
-        elif args.size == 'large':
-            config = StateSpaceConfig.large()
+        config = StateSpaceConfig.build(args.size)
     else:
         raise ValueError(f"Unknown model: {args.model}")
+
+    # Allow overriding config from CLI if needed (legacy) but sticking to size presets is better.
+    # The user didn't ask to remove these CLI args, but standardize config construction.
+    # I'll respect `args.size` first.
+
+    batch_sizes = [args.batch_size] if args.batch_size else [32] # Default if not provided
 
     results = []
 
