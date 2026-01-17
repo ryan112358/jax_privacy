@@ -90,6 +90,15 @@ At first glance, this looks similar, but notice the `feature_group_count=2` (whi
     2.  **Computation**: While the FLOP count is similar, the lack of immediate reduction means we lose the arithmetic intensity benefits of the standard "Batch-to-Weight" gradient convolution.
     3.  **Post-Processing**: After producing these per-sample gradients, the system must compute the norm of *each* one (reading them all back), clip them, and then sum them (reading and writing again).
 
+### Clarification on Gradient Propagation
+
+A common question is: "Don't we need to pass unreduced gradients to the previous layer regardless of the mode?"
+
+*   **Activation Gradients**: Yes, the gradient with respect to the *input/activations* of a layer (often denoted $\delta$ or $\nabla_x L$) must preserve the batch dimension to be passed to the previous layer. This step is identical in both standard and clipped training.
+*   **Weight Gradients**: The performance difference arises from the computation of the gradient with respect to the *weights* ($\nabla_w L$).
+    *   **Standard**: $\nabla_w L$ is computed by summing over the batch dimension immediately (e.g., `activations^T @ output_grads`). The result has no batch dimension.
+    *   **Clipped**: We must compute per-sample weight gradients ($\nabla_{w}^{(i)} L$) first. This prevents the immediate summation and forces the materialization of a large tensor with an extra batch dimension, as seen in the JAXPR above.
+
 ### Conclusion
 
 The performance gap is caused by the fundamental requirement of DP-SGD to access per-sample gradients.
