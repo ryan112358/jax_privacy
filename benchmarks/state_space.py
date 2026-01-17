@@ -15,6 +15,7 @@ class StateSpaceConfig:
     num_layers: int = 2
     max_len: int = 32
     dropout_rate: float = 0.0
+    framework: str = "jax"
 
     @classmethod
     def small(cls):
@@ -41,6 +42,21 @@ class StateSpaceConfig:
             return cls.large()
         else:
             raise ValueError(f"Unknown size: {size}")
+
+    def make(self, rngs=None):
+        if self.framework == "jax":
+            return StateSpaceModel(self, rngs=rngs)
+        elif self.framework == "torch":
+            return StateSpaceModelTorch(self)
+        else:
+            raise ValueError(f"Unknown framework: {self.framework}")
+
+    def generate_dummy_data(self, batch_size, seed=0):
+        np.random.seed(seed)
+        data = np.random.randint(0, self.vocab_size, (batch_size, self.max_len)).astype(np.int32)
+        np.random.seed(seed + 1)
+        targets = np.random.randint(0, self.vocab_size, (batch_size, self.max_len)).astype(np.int32)
+        return data, targets
 
 # --- Flax NNX Implementation ---
 
@@ -148,10 +164,3 @@ class StateSpaceModelTorch(nn.Module):
         x = self.norm_final(x)
         logits = self.lm_head(x)
         return logits
-
-def generate_dummy_data(batch_size, seq_len, vocab_size, seed=0):
-    np.random.seed(seed)
-    data = np.random.randint(0, vocab_size, (batch_size, seq_len)).astype(np.int32)
-    np.random.seed(seed + 1)
-    targets = np.random.randint(0, vocab_size, (batch_size, seq_len)).astype(np.int32)
-    return data, targets

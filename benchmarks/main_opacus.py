@@ -5,9 +5,9 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from benchmarks.transformer import TransformerTorch, TransformerConfig, generate_dummy_data as generate_transformer_data
-from benchmarks.cnn import CNNTorch, CNNConfig, generate_dummy_data as generate_cnn_data
-from benchmarks.state_space import StateSpaceModelTorch, StateSpaceConfig, generate_dummy_data as generate_state_space_data
+from .transformer import TransformerConfig
+from .cnn import CNNConfig
+from .state_space import StateSpaceConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 import numpy as np
@@ -31,48 +31,24 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if model_name == 'Transformer':
-        model = TransformerTorch(config).to(device)
-        # Generate data
-        d_np = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=42)
-        t_np = generate_transformer_data(batch_size, config.max_len, config.vocab_size, seed=43)
+    model = config.make().to(device)
+    d_np, t_np = config.generate_dummy_data(batch_size, seed=42)
 
-        d = torch.from_numpy(d_np).to(device)
-        t = torch.from_numpy(t_np).to(device)
-        data_batch, targets_batch = d, t
+    d = torch.from_numpy(d_np).to(device)
+    t = torch.from_numpy(t_np).long().to(device)
+    data_batch, targets_batch = d, t
 
+    if isinstance(config, TransformerConfig):
         def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1).long())
-
-    elif model_name == 'CNN':
-        model = CNNTorch(config).to(device)
-        d_np, t_np = generate_cnn_data(batch_size, config.input_shape, config.num_classes, seed=42)
-
-        # Transpose image to NCHW for PyTorch
-        # d_np is NHWC from generate_dummy_data
-        d_np = np.transpose(d_np, (0, 3, 1, 2))
-
-        d = torch.from_numpy(d_np).to(device)
-        t = torch.from_numpy(t_np).long().to(device)
-
-        data_batch, targets_batch = d, t
-
-        def loss_fn(output, targets):
+    elif isinstance(config, CNNConfig):
+         def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output, targets)
-
-    elif model_name == 'StateSpace':
-        model = StateSpaceModelTorch(config).to(device)
-        d_np, t_np = generate_state_space_data(batch_size, config.max_len, config.vocab_size, seed=42)
-
-        d = torch.from_numpy(d_np).to(device)
-        t = torch.from_numpy(t_np).long().to(device)
-
-        data_batch, targets_batch = d, t
-
-        def loss_fn(output, targets):
+    elif isinstance(config, StateSpaceConfig):
+         def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1))
     else:
-        raise ValueError(f"Unknown model: {model_name}")
+         raise ValueError(f"Unknown config type: {type(config)}")
 
     if mode == 'clipped':
         model = ModuleValidator.fix(model)
@@ -190,64 +166,42 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     print(f"{mode}: Avg time: {avg_time:.4f}s, Throughput: {throughput:.2f} samples/s")
 
     return {
-        "model": model_name,
-        "mode": mode,
         "batch_size": batch_size,
         "avg_time": avg_time,
-        "throughput": throughput
+        "throughput": throughput,
+        "model": config.__class__.__name__.replace("Config", ""),
+        "mode": mode,
     }
 
 def main():
     parser = argparse.ArgumentParser(description='Benchmark gradients (PyTorch/Opacus).')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
-    parser.add_argument('--model', type=str, default='Transformer', choices=['Transformer', 'CNN', 'StateSpace'],
+    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn', 'state_space'],
                         help='Model to benchmark')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
-                        help='Model size for CNN/Diffusion')
-    parser.add_argument('--batch_size', type=int, help='Batch size (optional, overrides default list)')
-    parser.add_argument('--output_file', type=str, help='Output JSON file to append results')
-    parser.add_argument('--max_len', type=int, default=64, help='Max sequence length for Transformer')
-    parser.add_argument('--vocab_size', type=int, default=1000)
-    parser.add_argument('--hidden_size', type=int, default=128)
-    parser.add_argument('--num_heads', type=int, default=4)
-    parser.add_argument('--num_layers', type=int, default=2)
+                        help='Model size')
+    parser.add_argument('--batch_size', type=int, required=True, help='Batch size')
+    parser.add_argument('--output_file', type=str, default='results.json', help='Output JSON file to append results')
 
     args = parser.parse_args()
 
-    if args.model == 'Transformer':
+    if args.model == 'transformer':
         config = TransformerConfig.build(args.size)
-    elif args.model == 'CNN':
+    elif args.model == 'cnn':
         config = CNNConfig.build(args.size)
-    elif args.model == 'StateSpace':
+    elif args.model == 'state_space':
         config = StateSpaceConfig.build(args.size)
     else:
         raise ValueError(f"Unknown model: {args.model}")
 
-    # Allow overriding config from CLI if needed (legacy) but sticking to size presets is better.
-    # The user didn't ask to remove these CLI args, but standardize config construction.
-    # I'll respect `args.size` first.
+    config.framework = 'torch'
 
-    batch_sizes = [args.batch_size] if args.batch_size else [32] # Default if not provided
+    res = run_benchmark(args.mode, args.model, config, args.batch_size)
 
-    results = []
-
-    for bs in batch_sizes:
-        res = run_benchmark(args.mode, args.model, config, bs)
-
-        # Add max_len to result if Transformer, to match JAX output
-        if args.model == 'Transformer':
-            res['max_len'] = args.max_len
-
-        results.append(res)
-
-        if args.output_file:
-            with open(args.output_file, 'a') as f:
-                f.write(json.dumps(res) + '\n')
-            print(f"Result appended to {args.output_file}")
-
-    if not args.output_file:
-        print("RESULTS_JSON=" + json.dumps(results))
+    with open(args.output_file, 'a') as f:
+        f.write(json.dumps(res) + '\n')
+    print(f"Result appended to {args.output_file}")
 
 if __name__ == "__main__":
     main()
