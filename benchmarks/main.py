@@ -6,35 +6,27 @@ import argparse
 import json
 import functools
 import os
-from benchmarks.transformer import Transformer, TransformerConfig, generate_dummy_data as generate_transformer_data
-from benchmarks.cnn import CNN, CNNConfig, generate_dummy_data as generate_cnn_data
-from benchmarks.state_space import StateSpaceModel, StateSpaceConfig, generate_dummy_data as generate_state_space_data
+from .transformer import TransformerConfig
+from .cnn import CNNConfig
+from .state_space import StateSpaceConfig
 from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
 import optax
 import numpy as np
 
-def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, microbatch_size=None, num_iterations=50):
-    print(f"Benchmarking with config: batch_size={batch_size}, model={model_class.__name__}")
+def benchmark(grad_fn, optimizer, config, batch_size, microbatch_size=None, num_iterations=50):
+    print(f"Benchmarking with config: batch_size={batch_size}")
 
     key = jax.random.key(0)
     key_model, key_data = jax.random.split(key, 2)
 
-    model = model_class(config, rngs=nnx.Rngs(key_model))
+    model = config.make(rngs=nnx.Rngs(key_model))
 
     graphdef, params, others = nnx.split(model, nnx.Param, ...)
 
     opt_state = optimizer.init(params)
 
-    # data_gen_fn signature adaptation
-    # transformer: (bs, seq_len, vocab_size, key) -> (data, targets)
-    # cnn: (bs, input_shape, num_classes, key) -> (data, targets)
-    # The caller main() should wrap data_gen_fn to only take (bs, key) or pass config inside.
-    # In main(), we wrapped it to take (bs, cfg, key) or similar.
-    # Let's assume data_gen_fn passed here takes (batch_size, config, seed).
-    # Since numpy random is seeded by seed argument in generate_dummy_data.
-
-    batch_numpy = data_gen_fn(batch_size, config, 0)
+    batch_numpy = config.generate_dummy_data(batch_size, seed=0)
 
     # Convert numpy batch to JAX array
     if isinstance(batch_numpy, tuple):
@@ -92,35 +84,11 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
         "batch_size": batch_size,
         "avg_time": avg_time,
         "throughput": throughput,
-        "model": model_class.__name__
+        "model": config.__class__.__name__.replace("Config", ""),
     }
 
     if microbatch_size is not None:
         res["microbatch_size"] = microbatch_size
-
-    # Add model specific config info
-    if isinstance(config, TransformerConfig):
-        res.update({
-            "vocab_size": config.vocab_size,
-            "hidden_size": config.hidden_size,
-            "num_heads": config.num_heads,
-            "num_layers": config.num_layers,
-            "max_len": config.max_len
-        })
-    elif isinstance(config, CNNConfig):
-        res.update({
-            "input_shape": list(config.input_shape),
-            "num_classes": config.num_classes,
-            "features": list(config.features),
-            "hidden_size": config.hidden_size
-        })
-    elif isinstance(config, StateSpaceConfig):
-        res.update({
-            "vocab_size": config.vocab_size,
-            "hidden_size": config.hidden_size,
-            "num_layers": config.num_layers,
-            "max_len": config.max_len
-        })
 
     return res
 
@@ -142,26 +110,14 @@ def main():
 
     if args.model == 'transformer':
         config = TransformerConfig.build(args.size)
-        model_class = Transformer
-        def data_gen_fn(bs, cfg, seed):
-            data = generate_transformer_data(bs, cfg.max_len, cfg.vocab_size, seed=seed)
-            targets = generate_transformer_data(bs, cfg.max_len, cfg.vocab_size, seed=seed+1)
-            return (data, targets)
-
     elif args.model == 'cnn':
         config = CNNConfig.build(args.size)
-        model_class = CNN
-        def data_gen_fn(bs, cfg, seed):
-            return generate_cnn_data(bs, cfg.input_shape, cfg.num_classes, seed=seed)
-
     elif args.model == 'state_space':
         config = StateSpaceConfig.build(args.size)
-        model_class = StateSpaceModel
-        def data_gen_fn(bs, cfg, seed):
-            return generate_state_space_data(bs, cfg.max_len, cfg.vocab_size, seed=seed)
-
     else:
         raise ValueError(f"Unknown model: {args.model}")
+
+    config.framework = 'jax'
 
     if args.mode == 'standard':
         grad_fn = jax.grad
@@ -180,7 +136,7 @@ def main():
              optax.adamw(learning_rate=1e-4)
          )
 
-    res = benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, args.batch_size, args.microbatch_size)
+    res = benchmark(grad_fn, optimizer, config, args.batch_size, args.microbatch_size)
     res['mode'] = args.mode
     res['microbatch_size'] = args.microbatch_size
 

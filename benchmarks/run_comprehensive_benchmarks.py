@@ -71,19 +71,9 @@ def main():
                             # It handles batching internally or via DataLoader.
                             # So we skip the microbatch loop for Torch.
 
-                            # Handle model name capitalization for main_opacus.py
-                            if model == 'transformer':
-                                model_name_arg = 'Transformer'
-                            elif model == 'cnn':
-                                model_name_arg = 'CNN'
-                            elif model == 'state_space':
-                                model_name_arg = 'StateSpace'
-                            else:
-                                model_name_arg = model # Fallback
-
                             cmd = cmd_base + cmd_module + [
                                 '--mode', mode,
-                                '--model', model_name_arg,
+                                '--model', model,
                                 '--size', size,
                                 '--batch_size', str(batch_size),
                                 '--output_file', args.output_file

@@ -14,6 +14,7 @@ class CNNConfig:
     features: Sequence[int] = (32, 64)
     kernel_size: Tuple[int, int] = (3, 3)
     hidden_size: int = 128
+    framework: str = "jax"
 
     @classmethod
     def small(cls):
@@ -53,6 +54,26 @@ class CNNConfig:
         else:
             raise ValueError(f"Unknown size: {size}")
 
+    def make(self, rngs=None):
+        if self.framework == "jax":
+            return CNN(self, rngs=rngs)
+        elif self.framework == "torch":
+            return CNNTorch(self)
+        else:
+            raise ValueError(f"Unknown framework: {self.framework}")
+
+    def generate_dummy_data(self, batch_size, seed=0):
+        """Generates dummy images and labels for benchmarking using numpy."""
+        np.random.seed(seed)
+        images = np.random.randn(batch_size, *self.input_shape).astype(np.float32)
+        labels = np.random.randint(0, self.num_classes, (batch_size,)).astype(np.int32)
+
+        if self.framework == "torch":
+            # NCHW
+            images = np.transpose(images, (0, 3, 1, 2))
+
+        return images, labels
+
 class CNN(nnx.Module):
     """A basic CNN model implemented with Flax NNX."""
     def __init__(self, config: CNNConfig, rngs: nnx.Rngs):
@@ -85,21 +106,6 @@ class CNN(nnx.Module):
         x = self.conv_layers(x)
         logits = self.head(x)
         return logits
-
-def generate_dummy_data(batch_size, input_shape, num_classes, seed=0):
-    """Generates dummy images and labels for benchmarking using numpy."""
-    np.random.seed(seed)
-    # Generate data in NHWC format (standard for images)
-    # We will let the consumer transpose if needed (e.g. Torch NCHW)
-    # The config.input_shape is usually (H, W, C).
-
-    # Actually, let's keep it simple. Flax expects (N, H, W, C).
-    # Torch expects (N, C, H, W).
-    # We will generate (N, H, W, C).
-
-    images = np.random.randn(batch_size, *input_shape).astype(np.float32)
-    labels = np.random.randint(0, num_classes, (batch_size,)).astype(np.int32)
-    return images, labels
 
 class CNNTorch(nn.Module):
     """A basic CNN model implemented with PyTorch."""
