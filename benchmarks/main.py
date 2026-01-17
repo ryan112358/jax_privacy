@@ -6,13 +6,13 @@ import argparse
 import json
 import functools
 import os
-from benchmarks.transformer import Transformer, generate_dummy_data as generate_transformer_data
-from benchmarks.cnn import CNN, generate_dummy_data as generate_cnn_data
+from benchmarks.transformer import Transformer, TransformerConfig, generate_dummy_data as generate_transformer_data
+from benchmarks.cnn import CNN, CNNConfig, generate_dummy_data as generate_cnn_data
 from benchmarks.state_space import StateSpaceModel, StateSpaceConfig, generate_dummy_data as generate_state_space_data
-from benchmarks.config import TransformerConfig, CNNConfig
 from jax_privacy.clipping import clipped_grad
 from jax_privacy import noise_addition
 import optax
+import numpy as np
 
 def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, microbatch_size=None, num_iterations=50):
     print(f"Benchmarking with config: batch_size={batch_size}, model={model_class.__name__}")
@@ -31,9 +31,16 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
     # cnn: (bs, input_shape, num_classes, key) -> (data, targets)
     # The caller main() should wrap data_gen_fn to only take (bs, key) or pass config inside.
     # In main(), we wrapped it to take (bs, cfg, key) or similar.
-    # Let's assume data_gen_fn passed here takes (batch_size, config, key).
+    # Let's assume data_gen_fn passed here takes (batch_size, config, seed).
+    # Since numpy random is seeded by seed argument in generate_dummy_data.
 
-    batch = data_gen_fn(batch_size, config, key_data)
+    batch_numpy = data_gen_fn(batch_size, config, 0)
+
+    # Convert numpy batch to JAX array
+    if isinstance(batch_numpy, tuple):
+        batch = tuple(jnp.array(x) for x in batch_numpy)
+    else:
+        batch = jnp.array(batch_numpy)
 
     def loss_fn(params, batch):
         m = nnx.merge(graphdef, params, others)
@@ -42,9 +49,6 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
         if isinstance(x, (tuple, list)):
             logits = m(*x)
         else:
-            # Handle 1D input if necessary
-            if hasattr(x, 'ndim') and x.ndim == 1:
-                x = jnp.expand_dims(x, 0)
             logits = m(x)
 
         if jnp.issubdtype(y.dtype, jnp.floating):
@@ -59,14 +63,9 @@ def benchmark(model_class, data_gen_fn, grad_fn, optimizer, config, batch_size, 
             loss = optax.softmax_cross_entropy(logits=logits, labels=one_hot).mean()
         return loss
 
-    if isinstance(grad_fn, functools.partial) and grad_fn.func == clipped_grad:
-         gradient_computer = grad_fn(loss_fn)
-    elif grad_fn == jax.grad:
-         gradient_computer = grad_fn(loss_fn)
-    else:
-         gradient_computer = grad_fn(loss_fn)
+    gradient_computer = grad_fn(loss_fn)
 
-    @jax.jit
+    @jax.jit(donate_argnums=(0, 1))
     def train_step(params, opt_state, batch):
         grads = gradient_computer(params, batch)
         updates, new_opt_state = optimizer.update(grads, opt_state, params)
@@ -142,42 +141,24 @@ def main():
     args = parser.parse_args()
 
     if args.model == 'transformer':
-        if args.size == 'small':
-            config = TransformerConfig.small()
-        elif args.size == 'medium':
-            config = TransformerConfig.medium()
-        elif args.size == 'large':
-            config = TransformerConfig.large()
-
+        config = TransformerConfig.build(args.size)
         model_class = Transformer
-        def data_gen_fn(bs, cfg, key):
-            data = generate_transformer_data(bs, cfg.max_len, cfg.vocab_size, key)
-            targets = generate_transformer_data(bs, cfg.max_len, cfg.vocab_size, key)
+        def data_gen_fn(bs, cfg, seed):
+            data = generate_transformer_data(bs, cfg.max_len, cfg.vocab_size, seed=seed)
+            targets = generate_transformer_data(bs, cfg.max_len, cfg.vocab_size, seed=seed+1)
             return (data, targets)
 
     elif args.model == 'cnn':
-        if args.size == 'small':
-            config = CNNConfig.small()
-        elif args.size == 'medium':
-            config = CNNConfig.medium()
-        elif args.size == 'large':
-            config = CNNConfig.large()
-
+        config = CNNConfig.build(args.size)
         model_class = CNN
-        def data_gen_fn(bs, cfg, key):
-            return generate_cnn_data(bs, cfg.input_shape, cfg.num_classes, key)
+        def data_gen_fn(bs, cfg, seed):
+            return generate_cnn_data(bs, cfg.input_shape, cfg.num_classes, seed=seed)
 
     elif args.model == 'state_space':
-        if args.size == 'small':
-            config = StateSpaceConfig.small()
-        elif args.size == 'medium':
-            config = StateSpaceConfig.medium()
-        elif args.size == 'large':
-            config = StateSpaceConfig.large()
-
+        config = StateSpaceConfig.build(args.size)
         model_class = StateSpaceModel
-        def data_gen_fn(bs, cfg, key):
-            return generate_state_space_data(bs, cfg.max_len, cfg.vocab_size, key=key)
+        def data_gen_fn(bs, cfg, seed):
+            return generate_state_space_data(bs, cfg.max_len, cfg.vocab_size, seed=seed)
 
     else:
         raise ValueError(f"Unknown model: {args.model}")

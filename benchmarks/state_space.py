@@ -6,6 +6,7 @@ from flax import nnx
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 @dataclass
 class StateSpaceConfig:
@@ -29,6 +30,17 @@ class StateSpaceConfig:
     def large(cls):
         # Aligned with TransformerConfig.large
         return cls(vocab_size=30000, hidden_size=768, num_layers=12, max_len=512)
+
+    @classmethod
+    def build(cls, size):
+        if size == 'small':
+            return cls.small()
+        elif size == 'medium':
+            return cls.medium()
+        elif size == 'large':
+            return cls.large()
+        else:
+            raise ValueError(f"Unknown size: {size}")
 
 # --- Flax NNX Implementation ---
 
@@ -137,17 +149,9 @@ class StateSpaceModelTorch(nn.Module):
         logits = self.lm_head(x)
         return logits
 
-def generate_dummy_data(batch_size, seq_len, vocab_size, key=None, seed=None):
-    if key is not None:
-         k1, k2 = jax.random.split(key)
-         data = jax.random.randint(k1, (batch_size, seq_len), 0, vocab_size, dtype=jnp.int32)
-         targets = jax.random.randint(k2, (batch_size, seq_len), 0, vocab_size, dtype=jnp.int32)
-         return data, targets
-    elif seed is not None:
-         torch.manual_seed(seed)
-         data = torch.randint(0, vocab_size, (batch_size, seq_len))
-         torch.manual_seed(seed + 1)
-         targets = torch.randint(0, vocab_size, (batch_size, seq_len))
-         return data, targets
-    else:
-         raise ValueError("Must provide key (Jax) or seed (Torch)")
+def generate_dummy_data(batch_size, seq_len, vocab_size, seed=0):
+    np.random.seed(seed)
+    data = np.random.randint(0, vocab_size, (batch_size, seq_len)).astype(np.int32)
+    np.random.seed(seed + 1)
+    targets = np.random.randint(0, vocab_size, (batch_size, seq_len)).astype(np.int32)
+    return data, targets
