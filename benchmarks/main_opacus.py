@@ -32,6 +32,11 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = config.make().to(device)
+
+    # Count parameters
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of parameters: {num_params}")
+
     d_np, t_np = config.generate_dummy_data(batch_size, seed=42)
 
     d = torch.from_numpy(d_np).to(device)
@@ -171,6 +176,7 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
         "throughput": throughput,
         "model": config.__class__.__name__.replace("Config", ""),
         "mode": mode,
+        "num_params": num_params,
     }
 
 def main():
@@ -198,6 +204,8 @@ def main():
     config.framework = 'torch'
 
     res = run_benchmark(args.mode, args.model, config, args.batch_size)
+    res['framework'] = 'torch'
+    res['size'] = args.size
 
     with open(args.output_file, 'a') as f:
         f.write(json.dumps(res) + '\n')

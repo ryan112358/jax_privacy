@@ -24,6 +24,10 @@ def benchmark(grad_fn, optimizer, config, batch_size, microbatch_size=None, num_
 
     graphdef, params, others = nnx.split(model, nnx.Param, ...)
 
+    # Count parameters
+    num_params = sum(x.size for x in jax.tree_util.tree_leaves(params))
+    print(f"Number of parameters: {num_params}")
+
     opt_state = optimizer.init(params)
 
     batch_numpy = config.generate_dummy_data(batch_size, seed=0)
@@ -85,6 +89,7 @@ def benchmark(grad_fn, optimizer, config, batch_size, microbatch_size=None, num_
         "avg_time": avg_time,
         "throughput": throughput,
         "model": config.__class__.__name__.replace("Config", ""),
+        "num_params": num_params,
     }
 
     if microbatch_size is not None:
@@ -139,6 +144,8 @@ def main():
     res = benchmark(grad_fn, optimizer, config, args.batch_size, args.microbatch_size)
     res['mode'] = args.mode
     res['microbatch_size'] = args.microbatch_size
+    res['framework'] = 'jax'
+    res['size'] = args.size
 
     # Append to results file
     with open(args.output_file, 'a') as f:

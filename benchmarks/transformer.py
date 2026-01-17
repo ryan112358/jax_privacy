@@ -26,7 +26,7 @@ class TransformerConfig:
             hidden_size=256,
             num_heads=4,
             num_layers=2,
-            max_len=64,
+            max_len=256,
             dropout_rate=0.1
         )
 
@@ -38,7 +38,7 @@ class TransformerConfig:
             hidden_size=384,
             num_heads=8,
             num_layers=6,
-            max_len=128,
+            max_len=256,
             dropout_rate=0.1
         )
 
@@ -50,7 +50,7 @@ class TransformerConfig:
             hidden_size=768,
             num_heads=12,
             num_layers=12,
-            max_len=512,
+            max_len=256,
             dropout_rate=0.1
         )
 
