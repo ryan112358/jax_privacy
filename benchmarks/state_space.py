@@ -20,17 +20,17 @@ class StateSpaceConfig:
     @classmethod
     def small(cls):
         # Aligned with TransformerConfig.small
-        return cls(vocab_size=1000, hidden_size=256, num_layers=2, max_len=64)
+        return cls(vocab_size=1000, hidden_size=256, num_layers=2, max_len=256)
 
     @classmethod
     def medium(cls):
         # Aligned with TransformerConfig.medium
-        return cls(vocab_size=1000, hidden_size=384, num_layers=6, max_len=128)
+        return cls(vocab_size=1000, hidden_size=384, num_layers=6, max_len=256)
 
     @classmethod
     def large(cls):
         # Aligned with TransformerConfig.large
-        return cls(vocab_size=30000, hidden_size=768, num_layers=12, max_len=512)
+        return cls(vocab_size=30000, hidden_size=768, num_layers=12, max_len=256)
 
     @classmethod
     def build(cls, size):
