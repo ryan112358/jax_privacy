@@ -5,9 +5,9 @@ from torch.utils.data import TensorDataset, DataLoader
 import time
 import argparse
 import json
-from .transformer import TransformerConfig
-from .cnn import CNNConfig
-from .state_space import StateSpaceConfig
+from transformer import TransformerConfig
+from cnn import CNNConfig
+from state_space import StateSpaceConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 import numpy as np
@@ -37,7 +37,7 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of parameters: {num_params}")
 
-    d_np, t_np = config.generate_dummy_data(batch_size, seed=42)
+    d_np, t_np = config.generate_dummy_data(batch_size)
 
     d = torch.from_numpy(d_np).to(device)
     t = torch.from_numpy(t_np).long().to(device)

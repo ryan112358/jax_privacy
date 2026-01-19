@@ -51,10 +51,8 @@ class StateSpaceConfig:
         else:
             raise ValueError(f"Unknown framework: {self.framework}")
 
-    def generate_dummy_data(self, batch_size, seed=0):
-        np.random.seed(seed)
+    def generate_dummy_data(self, batch_size):
         data = np.random.randint(0, self.vocab_size, (batch_size, self.max_len)).astype(np.int32)
-        np.random.seed(seed + 1)
         targets = np.random.randint(0, self.vocab_size, (batch_size, self.max_len)).astype(np.int32)
         return data, targets
 

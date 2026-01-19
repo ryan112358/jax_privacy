@@ -14,8 +14,7 @@ class TransformerConfig:
     hidden_size: int = 64
     num_heads: int = 4
     num_layers: int = 2
-    max_len: int = 32
-    dropout_rate: float = 0.0
+    max_len: int = 256
     framework: str = "jax"
 
     @classmethod
@@ -27,7 +26,6 @@ class TransformerConfig:
             num_heads=4,
             num_layers=2,
             max_len=256,
-            dropout_rate=0.1
         )
 
     @classmethod
@@ -39,7 +37,6 @@ class TransformerConfig:
             num_heads=8,
             num_layers=6,
             max_len=256,
-            dropout_rate=0.1
         )
 
     @classmethod
@@ -51,7 +48,6 @@ class TransformerConfig:
             num_heads=12,
             num_layers=12,
             max_len=256,
-            dropout_rate=0.1
         )
 
     @classmethod
@@ -73,24 +69,30 @@ class TransformerConfig:
         else:
             raise ValueError(f"Unknown framework: {self.framework}")
 
-    def generate_dummy_data(self, batch_size, seed=0):
-        np.random.seed(seed)
+    def generate_dummy_data(self, batch_size):
         data = np.random.randint(0, self.vocab_size, (batch_size, self.max_len)).astype(np.int32)
-
-        np.random.seed(seed + 1)
         targets = np.random.randint(0, self.vocab_size, (batch_size, self.max_len)).astype(np.int32)
-
         return data, targets
 
+def causal_flash_attention_fn(query, key, value, **kwargs):
+    return jax.nn.dot_product_attention(
+        query.astype(jnp.bfloat16),
+        key.astype(jnp.bfloat16),
+        value.astype(jnp.bfloat16),
+        implementation='xla' if jax.default_backend() == 'cpu' else 'cudnn',
+        is_causal=True,
+    ).astype(jnp.float32)
+
 class TransformerBlock(nnx.Module):
-    def __init__(self, hidden_size: int, num_heads: int, dropout_rate: float, rngs: nnx.Rngs):
+    def __init__(self, hidden_size: int, num_heads: int, rngs: nnx.Rngs):
         self.attention = nnx.MultiHeadAttention(
             num_heads=num_heads,
             in_features=hidden_size,
             qkv_features=hidden_size,
             out_features=hidden_size,
             decode=False,
-            rngs=rngs
+            rngs=rngs,
+            attention_fn=causal_flash_attention_fn
         )
         self.norm1 = nnx.LayerNorm(hidden_size, rngs=rngs)
         self.norm2 = nnx.LayerNorm(hidden_size, rngs=rngs)
@@ -122,7 +124,7 @@ class Transformer(nnx.Module):
         self.pos_embed = nnx.Embed(config.max_len, config.hidden_size, rngs=rngs)
         self.layers = nnx.List(
             [
-                TransformerBlock(config.hidden_size, config.num_heads, config.dropout_rate, rngs)
+                TransformerBlock(config.hidden_size, config.num_heads, rngs)
                 for _ in range(config.num_layers)
             ]
         )
@@ -150,7 +152,7 @@ class Transformer(nnx.Module):
         return logits
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, hidden_size: int, num_heads: int, dropout_rate: float):
+    def __init__(self, hidden_size: int, num_heads: int):
         super().__init__()
         assert hidden_size % num_heads == 0
         self.hidden_size = hidden_size
@@ -164,9 +166,7 @@ class CausalSelfAttention(nn.Module):
         self.v_proj = nn.Linear(hidden_size, hidden_size)
         self.out_proj = nn.Linear(hidden_size, hidden_size)
 
-        self.dropout = nn.Dropout(dropout_rate)
-
-    def forward(self, x, mask=None):
+    def forward(self, x):
         # x: (batch, seq, hidden)
         batch_size, seq_len, _ = x.size()
 
@@ -174,17 +174,8 @@ class CausalSelfAttention(nn.Module):
         k = self.k_proj(x).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) # (B, H, L, D)
         v = self.v_proj(x).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) # (B, H, L, D)
 
-        # Scores: (B, H, L, D) @ (B, H, D, L) -> (B, H, L, L)
-        scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale
-
-        if mask is not None:
-            scores = scores + mask
-
-        attn = F.softmax(scores, dim=-1)
-        attn = self.dropout(attn)
-
-        # Output: (B, H, L, L) @ (B, H, L, D) -> (B, H, L, D)
-        out = torch.matmul(attn, v)
+        # Flash Attention
+        out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
 
         # Reassemble: (B, H, L, D) -> (B, L, H, D) -> (B, L, H*D)
         out = out.transpose(1, 2).contiguous().view(batch_size, seq_len, self.hidden_size)
@@ -192,10 +183,10 @@ class CausalSelfAttention(nn.Module):
         return self.out_proj(out)
 
 class TransformerBlockTorch(nn.Module):
-    def __init__(self, hidden_size: int, num_heads: int, dropout_rate: float):
+    def __init__(self, hidden_size: int, num_heads: int):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size)
-        self.attention = CausalSelfAttention(hidden_size, num_heads, dropout_rate)
+        self.attention = CausalSelfAttention(hidden_size, num_heads)
         self.norm2 = nn.LayerNorm(hidden_size)
         self.mlp = nn.Sequential(
             nn.Linear(hidden_size, hidden_size * 4),
@@ -203,11 +194,11 @@ class TransformerBlockTorch(nn.Module):
             nn.Linear(hidden_size * 4, hidden_size)
         )
 
-    def forward(self, x, mask=None):
+    def forward(self, x):
         # x: (batch, seq, hidden)
         residual = x
         x = self.norm1(x)
-        x = self.attention(x, mask=mask)
+        x = self.attention(x)
         x = x + residual
 
         residual = x
@@ -223,7 +214,7 @@ class TransformerTorch(nn.Module):
         self.embed = nn.Embedding(config.vocab_size, config.hidden_size)
         self.pos_embed = nn.Embedding(config.max_len, config.hidden_size)
         self.layers = nn.ModuleList([
-            TransformerBlockTorch(config.hidden_size, config.num_heads, config.dropout_rate)
+            TransformerBlockTorch(config.hidden_size, config.num_heads)
             for _ in range(config.num_layers)
         ])
         self.norm_final = nn.LayerNorm(config.hidden_size)
@@ -236,16 +227,10 @@ class TransformerTorch(nn.Module):
 
         pos = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch_size, seq_len)
 
-        # Create causal mask
-        # Torch MultiheadAttention expects attn_mask of shape (L, S) or (N*num_heads, L, S)
-        # values: 0 for keep, -inf for discard.
-        # Using triu to set upper triangle (future) to -inf.
-        mask = torch.triu(torch.ones(seq_len, seq_len, device=device) * float('-inf'), diagonal=1)
-
         x = self.embed(x) + self.pos_embed(pos)
 
         for layer in self.layers:
-            x = layer(x, mask=mask)
+            x = layer(x)
 
         x = self.norm_final(x)
         logits = self.lm_head(x)

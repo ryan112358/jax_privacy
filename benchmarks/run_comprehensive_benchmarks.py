@@ -36,14 +36,14 @@ def main():
                 for mode in args.modes:
                     print(f"\n--- Benchmarking {framework} {model} {size} {mode} ---")
 
-                    batch_size = 16
+                    batch_size = 1
                     while True:
                         print(f"Testing batch size: {batch_size}")
 
                         cmd_base = [sys.executable, '-m']
 
                         if framework == 'jax':
-                            cmd_module = ['benchmarks.main']
+                            cmd_module = ['main']
                             cmd = cmd_base + cmd_module + [
                                 '--mode', mode,
                                 '--model', model,
@@ -53,7 +53,7 @@ def main():
                             ]
 
                         elif framework == 'torch':
-                            cmd_module = ['benchmarks.main_opacus']
+                            cmd_module = ['main_opacus']
                             cmd = cmd_base + cmd_module + [
                                 '--mode', mode,
                                 '--model', model,

@@ -6,37 +6,25 @@ import argparse
 import json
 import functools
 import os
-from .transformer import TransformerConfig
-from .cnn import CNNConfig
-from .state_space import StateSpaceConfig
-from jax_privacy.clipping import clipped_grad
+from transformer import TransformerConfig
+from cnn import CNNConfig
+from state_space import StateSpaceConfig
+from jax_privacy import clipped_grad
 from jax_privacy import noise_addition
 import optax
 import numpy as np
 
-def benchmark(grad_fn, optimizer, config, batch_size, microbatch_size=None, num_iterations=50):
+def benchmark(grad_fn, optimizer, config, batch_size, num_iterations=50):
     print(f"Benchmarking with config: batch_size={batch_size}")
 
-    key = jax.random.key(0)
-    key_model, key_data = jax.random.split(key, 2)
-
-    model = config.make(rngs=nnx.Rngs(key_model))
-
+    model = config.make(rngs=nnx.Rngs(0))
     graphdef, params, others = nnx.split(model, nnx.Param, ...)
-
-    # Count parameters
     num_params = sum(x.size for x in jax.tree_util.tree_leaves(params))
     print(f"Number of parameters: {num_params}")
 
     opt_state = optimizer.init(params)
-
-    batch_numpy = config.generate_dummy_data(batch_size, seed=0)
-
-    # Convert numpy batch to JAX array
-    if isinstance(batch_numpy, tuple):
-        batch = tuple(jnp.array(x) for x in batch_numpy)
-    else:
-        batch = jnp.array(batch_numpy)
+    batch_numpy = config.generate_dummy_data(batch_size)
+    batch = jax.tree.map(jnp.array, batch_numpy)
 
     def loss_fn(params, batch):
         m = nnx.merge(graphdef, params, others)
@@ -55,8 +43,7 @@ def benchmark(grad_fn, optimizer, config, batch_size, microbatch_size=None, num_
                 logits = logits.reshape(-1, logits.shape[-1])
                 y = y.reshape(-1)
 
-            one_hot = jax.nn.one_hot(y, logits.shape[-1])
-            loss = optax.softmax_cross_entropy(logits=logits, labels=one_hot).mean()
+            loss = optax.softmax_cross_entropy_with_integer_labels(logits=logits, labels=y).mean()
         return loss
 
     gradient_computer = grad_fn(loss_fn)
@@ -68,7 +55,6 @@ def benchmark(grad_fn, optimizer, config, batch_size, microbatch_size=None, num_
         new_params = optax.apply_updates(params, updates)
         return new_params, new_opt_state
 
-    # Warmup
     params, opt_state = train_step(params, opt_state, batch)
     jax.block_until_ready(params)
 
@@ -92,9 +78,6 @@ def benchmark(grad_fn, optimizer, config, batch_size, microbatch_size=None, num_
         "num_params": num_params,
     }
 
-    if microbatch_size is not None:
-        res["microbatch_size"] = microbatch_size
-
     return res
 
 def main():
@@ -106,7 +89,6 @@ def main():
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size: small, medium, large')
 
-    # Args from origin/main
     parser.add_argument('--batch_size', type=int, required=True, help='Batch size')
     parser.add_argument('--microbatch_size', type=int, help='Microbatch size for clipped mode')
     parser.add_argument('--output_file', type=str, default='results.json')
@@ -131,17 +113,16 @@ def main():
          grad_fn = functools.partial(
             clipped_grad,
             l2_clip_norm=1.0,
-            keep_batch_dim=True,
             normalize_by=args.batch_size,
             microbatch_size=args.microbatch_size
         )
-         privatizer = noise_addition.gaussian_privatizer(stddev=0.1, prng_key=jax.random.key(1337))
+         privatizer = noise_addition.gaussian_privatizer(stddev=0.1, prng_key=0)
          optimizer = optax.chain(
              privatizer,
              optax.adamw(learning_rate=1e-4)
          )
 
-    res = benchmark(grad_fn, optimizer, config, args.batch_size, args.microbatch_size)
+    res = benchmark(grad_fn, optimizer, config, args.batch_size)
     res['mode'] = args.mode
     res['microbatch_size'] = args.microbatch_size
     res['framework'] = 'jax'

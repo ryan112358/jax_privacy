@@ -62,9 +62,8 @@ class CNNConfig:
         else:
             raise ValueError(f"Unknown framework: {self.framework}")
 
-    def generate_dummy_data(self, batch_size, seed=0):
+    def generate_dummy_data(self, batch_size):
         """Generates dummy images and labels for benchmarking using numpy."""
-        np.random.seed(seed)
         images = np.random.randn(batch_size, *self.input_shape).astype(np.float32)
         labels = np.random.randint(0, self.num_classes, (batch_size,)).astype(np.int32)
 
