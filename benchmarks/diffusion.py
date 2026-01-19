@@ -3,6 +3,7 @@ from typing import Tuple, Sequence, Optional
 import jax
 import jax.numpy as jnp
 from flax import nnx
+import numpy as np
 
 # Config
 @dataclass
@@ -11,6 +12,7 @@ class DiffusionConfig:
     channels: int = 3
     hidden_size: int = 64
     num_layers: int = 2
+    framework: str = "jax"
 
     @classmethod
     def small(cls):
@@ -23,6 +25,38 @@ class DiffusionConfig:
     @classmethod
     def large(cls):
         return cls(hidden_size=256, num_layers=6)
+
+    @classmethod
+    def build(cls, size):
+        if size == 'small':
+            return cls.small()
+        elif size == 'medium':
+            return cls.medium()
+        elif size == 'large':
+            return cls.large()
+        else:
+            raise ValueError(f"Unknown size: {size}")
+
+    def make(self, rngs=None):
+        if self.framework == "jax":
+            return FlaxDiffusion(self, rngs=rngs)
+        elif self.framework == "torch":
+            return TorchDiffusion(self)
+        else:
+            raise ValueError(f"Unknown framework: {self.framework}")
+
+    def generate_dummy_data(self, batch_size):
+        # Returns ((x, t), target) as numpy arrays
+        if self.framework == "jax":
+             x = np.random.randn(batch_size, self.image_size, self.image_size, self.channels).astype(np.float32)
+        elif self.framework == "torch":
+             x = np.random.randn(batch_size, self.channels, self.image_size, self.image_size).astype(np.float32)
+        else:
+             raise ValueError(f"Unknown framework: {self.framework}")
+
+        t = np.random.randint(0, 1000, (batch_size,)).astype(np.int32)
+        target = np.random.randn(*x.shape).astype(np.float32)
+        return (x, t), target
 
 # Flax Implementation
 class FlaxDiffusionBlock(nnx.Module):

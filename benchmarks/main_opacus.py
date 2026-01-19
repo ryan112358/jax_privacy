@@ -8,6 +8,7 @@ import json
 from transformer import TransformerConfig
 from cnn import CNNConfig
 from state_space import StateSpaceConfig
+from diffusion import DiffusionConfig
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
 import numpy as np
@@ -37,11 +38,20 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of parameters: {num_params}")
 
-    d_np, t_np = config.generate_dummy_data(batch_size)
+    dummy_data = config.generate_dummy_data(batch_size)
 
-    d = torch.from_numpy(d_np).to(device)
-    t = torch.from_numpy(t_np).long().to(device)
-    data_batch, targets_batch = d, t
+    def to_device(data):
+        if isinstance(data, np.ndarray):
+            # If floating point, use default float (float32), else long for integers
+            if np.issubdtype(data.dtype, np.floating):
+                 return torch.from_numpy(data).float().to(device)
+            else:
+                 return torch.from_numpy(data).long().to(device)
+        elif isinstance(data, (tuple, list)):
+            return type(data)(to_device(x) for x in data)
+        return data
+
+    data_batch, targets_batch = to_device(dummy_data)
 
     if isinstance(config, TransformerConfig):
         def loss_fn(output, targets):
@@ -52,6 +62,9 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
     elif isinstance(config, StateSpaceConfig):
          def loss_fn(output, targets):
              return nn.CrossEntropyLoss()(output.view(-1, config.vocab_size), targets.view(-1))
+    elif isinstance(config, DiffusionConfig):
+         def loss_fn(output, targets):
+             return nn.MSELoss()(output, targets)
     else:
          raise ValueError(f"Unknown config type: {type(config)}")
 
@@ -119,6 +132,10 @@ def run_benchmark(mode, model_name, config, batch_size, num_iterations=50):
                 return batch[0], batch[1]
             elif len(batch) > 2:
                 # Assume last is target, rest are inputs
+                # For diffusion (x, t, target), we want ((x, t), target)
+                if isinstance(config, DiffusionConfig):
+                    # x is batch[0], t is batch[1], target is batch[2]
+                     return (batch[0], batch[1]), batch[2]
                 return batch[:-1], batch[-1]
             else:
                  raise ValueError("Unexpected batch size")
@@ -183,7 +200,7 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark gradients (PyTorch/Opacus).')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
-    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn', 'state_space'],
+    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn', 'state_space', 'diffusion'],
                         help='Model to benchmark')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size')
@@ -198,6 +215,8 @@ def main():
         config = CNNConfig.build(args.size)
     elif args.model == 'state_space':
         config = StateSpaceConfig.build(args.size)
+    elif args.model == 'diffusion':
+        config = DiffusionConfig.build(args.size)
     else:
         raise ValueError(f"Unknown model: {args.model}")
 

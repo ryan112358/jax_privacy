@@ -1,0 +1,4 @@
+{"batch_size": 8, "avg_time": 0.05545661449432373, "throughput": 144.2569127767228, "model": "Diffusion", "num_params": 215491, "mode": "standard", "microbatch_size": null, "framework": "jax", "size": "small"}
+{"batch_size": 8, "avg_time": 0.05233803272247314, "throughput": 152.85251630340557, "model": "Diffusion", "mode": "standard", "num_params": 215491, "framework": "torch", "size": "small"}
+{"batch_size": 8, "avg_time": 0.7340643739700318, "throughput": 10.898226754601499, "model": "Diffusion", "num_params": 215491, "mode": "clipped", "microbatch_size": 4, "framework": "jax", "size": "small"}
+{"batch_size": 8, "avg_time": 0.08374226093292236, "throughput": 95.53121579088972, "model": "Diffusion", "mode": "clipped", "num_params": 215491, "framework": "torch", "size": "small"}
