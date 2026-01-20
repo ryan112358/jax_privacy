@@ -1,0 +1,6 @@
+{"batch_size": 32, "avg_time": 0.0251859712600708, "throughput": 1270.5485791898757, "model": "CNN", "mode": "standard", "num_params": 1070794, "framework": "torch", "size": "small"}
+{"batch_size": 32, "avg_time": 0.138752498626709, "throughput": 230.6264774812509, "model": "CNN", "mode": "clipped", "num_params": 1070794, "framework": "torch", "size": "small"}
+{"batch_size": 32, "avg_time": 0.5294080448150634, "throughput": 60.44486915792613, "model": "Transformer", "mode": "standard", "num_params": 2158568, "framework": "torch", "size": "small"}
+{"batch_size": 32, "avg_time": 0.8049246835708618, "throughput": 39.75527232938045, "model": "Transformer", "mode": "clipped", "num_params": 2158568, "framework": "torch", "size": "small"}
+{"batch_size": 32, "avg_time": 0.43752830505371093, "throughput": 73.1381253061369, "model": "StateSpace", "mode": "standard", "num_params": 777704, "framework": "torch", "size": "small"}
+{"batch_size": 32, "avg_time": 7.098784308433533, "throughput": 4.507814100223217, "model": "StateSpace", "mode": "clipped", "num_params": 777704, "framework": "torch", "size": "small"}
