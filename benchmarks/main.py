@@ -9,6 +9,7 @@ import os
 from transformer import TransformerConfig
 from cnn import CNNConfig
 from state_space import StateSpaceConfig
+from diffusion import DiffusionConfig
 from jax_privacy import clipped_grad
 from jax_privacy import noise_addition
 import optax
@@ -84,8 +85,8 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmark Transformer and CNN gradients.')
     parser.add_argument('--mode', type=str, required=True, choices=['standard', 'clipped'],
                         help='Benchmark mode: standard or clipped')
-    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn', 'state_space'],
-                        help='Model to benchmark: transformer, cnn, or state_space')
+    parser.add_argument('--model', type=str, default='transformer', choices=['transformer', 'cnn', 'state_space', 'diffusion'],
+                        help='Model to benchmark: transformer, cnn, state_space, or diffusion')
     parser.add_argument('--size', type=str, default='small', choices=['small', 'medium', 'large'],
                         help='Model size: small, medium, large')
 
@@ -101,6 +102,8 @@ def main():
         config = CNNConfig.build(args.size)
     elif args.model == 'state_space':
         config = StateSpaceConfig.build(args.size)
+    elif args.model == 'diffusion':
+        config = DiffusionConfig.build(args.size)
     else:
         raise ValueError(f"Unknown model: {args.model}")
 
