@@ -14,18 +14,20 @@
 
 """Public API for matrix factorization."""
 
-from . import banded
-from . import buffered_toeplitz
-from . import dense
-from . import optimization
-from . import sensitivity
-from . import streaming_matrix
-from . import toeplitz
-from .streaming_matrix import StreamingMatrix
+from jax_privacy.matrix_factorization import banded
+from jax_privacy.matrix_factorization import buffered_toeplitz
+from jax_privacy.matrix_factorization import checks
+from jax_privacy.matrix_factorization import dense
+from jax_privacy.matrix_factorization import optimization
+from jax_privacy.matrix_factorization import sensitivity
+from jax_privacy.matrix_factorization import streaming_matrix
+from jax_privacy.matrix_factorization import toeplitz
+from jax_privacy.matrix_factorization.streaming_matrix import StreamingMatrix
 
 __all__ = [
     'banded',
     'buffered_toeplitz',
+    'checks',
     'dense',
     'optimization',
     'sensitivity',
