@@ -7,7 +7,6 @@ Matrix Factorization
 .. autosummary::
   :toctree: _autosummary_output
   :nosignatures:
-  :template: autosummary/module.rst
 
   matrix_factorization
   matrix_factorization.banded
