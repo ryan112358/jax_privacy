@@ -25,10 +25,18 @@ Public API
   :toctree: _autosummary_output
   :nosignatures:
 
-  batch_selection
   clipping
   noise_addition
   auditing
+
+Batch Selection API
+-------------------
+.. autosummary::
+  :toctree: _autosummary_output
+  :nosignatures:
+  :template: autosummary/module_with_classes.rst
+
+  batch_selection
 
 Matrix Factorization
 --------------------
