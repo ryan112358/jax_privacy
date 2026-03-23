@@ -34,7 +34,7 @@ Batch Selection API
 .. autosummary::
   :toctree: _autosummary_output
   :nosignatures:
-  :template: autosummary/module_with_classes.rst
+  :template: autosummary/batch_selection_module.rst
 
   batch_selection
 
