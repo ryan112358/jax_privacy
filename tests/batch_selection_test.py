@@ -341,7 +341,7 @@ class BatchSelectionTest(parameterized.TestCase):
     strategy = batch_selection.UserSelectionStrategy(
         base_strategy, examples_per_user_per_batch=2, shuffle_per_user=True
     )
-    unique_ids = np.random.choice(2**30, size=16, replace=False)
+    unique_ids = np.random.choice(2**20, size=16, replace=False)
     user_ids = np.concatenate([[unique_ids[i]] * i for i in range(16)])
     np.random.shuffle(user_ids)
     for batch in strategy.batch_iterator(user_ids, rng=0):
