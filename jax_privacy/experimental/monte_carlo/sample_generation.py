@@ -257,11 +257,8 @@ def _sample_b_min_sep_modes_with_truncation(
             active_last_part[indicator], active_indices[indicator]
         ]
         retention_prob = B_max / (active_rest_batch_sizes + 1)
-        retained = rng.binomial(
-            n=1,
-            p=retention_prob,
-            size=np.count_nonzero(indicator),
-        ).astype(bool)
+        size = np.count_nonzero(indicator)
+        retained = rng.uniform(size=size) < retention_prob
         # If truncation and retained, x = x_truncated.
         # If truncation and not retained, x = 0.
         x_active[indicator] = np.where(retained, x_truncated, 0.0)
