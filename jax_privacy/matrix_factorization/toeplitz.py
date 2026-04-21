@@ -871,8 +871,8 @@ def optimize_banded_inverse_toeplitz(
       optimize, including the diagonal.
     noising_coef: Optional initialization for the noising coefficients. If not
       provided, initializes from `strategy_coef` if given, otherwise from
-      `banded_inverse_square_root_noising_coefs(workload_coef=...)`.
-      If longer than `num_bands`, the extra coefficients are ignored.
+      `banded_inverse_square_root_noising_coefs(workload_coef=...)`. If longer
+      than `num_bands`, the extra coefficients are ignored.
     strategy_coef: Optional initialization for the strategy coefficients. If
       provided, the corresponding noising coefficients are computed via
       `inverse_coef`.
