@@ -884,8 +884,6 @@ def optimize_banded_inverse_toeplitz(
       Use jnp.mean to optimize mean-squared-error, jnp.max to optimize max
       squared error, or lambda v: v[-1] to optimize last iterate squared error.
       Defaults to jnp.mean.
-    skip_checks: If True, don't perform input verification. It may be
-      necessary to set skip_checks=True when this function is jitted.
 
   Returns:
     The optimized Toeplitz coefficients of the lower-triangular noising
