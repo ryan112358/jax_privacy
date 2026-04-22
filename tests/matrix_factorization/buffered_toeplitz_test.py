@@ -132,7 +132,6 @@ def brute_force_max_loss(blt, n, min_sep=1, max_participations=None):
       coef,
       min_sep=min_sep,
       max_participations=max_participations,
-      skip_checks=False,
   )
   error = jnp.max(toeplitz.per_query_error(strategy_coef=coef))
   return sens_squared * error
@@ -631,15 +630,6 @@ class OptimizationTest(parameterized.TestCase):
         n=nk, min_sep=1, max_participations=nk
     )
     assert_allclose(loss_fn.loss(blt), expected_loss, atol=1e-3, rtol=1e-2)
-
-  def test_assert_blt_valid_for_minsep(self):
-    blt = buffered_toeplitz.BufferedToeplitz.build(
-        buf_decay=[0.9], output_scale=[-0.1]
-    )
-    with self.assertRaisesRegex(
-        RuntimeError, 'Error computing sensitivity for BLT'
-    ):
-      buffered_toeplitz._assert_blt_valid_for_minsep(blt, 100)
 
   @hypothesis.settings(max_examples=scale_max_examples(0.25))
   @hypothesis.given(

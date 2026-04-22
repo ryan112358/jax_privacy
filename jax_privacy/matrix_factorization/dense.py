@@ -51,25 +51,24 @@ def per_query_error(
     noising_matrix: The (possibly non-square) noising matrix C^{-1}.
     workload_matrix: The workload matrix. Defaults to `jnp.tri`, the prefix sum
       workload matrix.
-    skip_checks: If True, don't perform input verification. It may be necessary
-      to set skip_checks=True when this function is jitted.
+    skip_checks: If True, skip input verification that depends on array values
+      (e.g. finiteness, triangularity). Checks on static attributes (shapes,
+      None-ness) are always performed.
 
   Returns:
     The expected per-query squared error, an array of length n.
   """
-  if not skip_checks:
-    if (strategy_matrix is None) == (noising_matrix is None):
-      raise ValueError(
-          'Specify exactly one of strategy_matrix or noising_matrix.'
-      )
+  if (strategy_matrix is None) == (noising_matrix is None):
+    raise ValueError(
+        'Specify exactly one of strategy_matrix or noising_matrix.'
+    )
 
   if strategy_matrix is not None:
     C = strategy_matrix
-    if not skip_checks:
-      # We require square C, because for a non-square C, the choice of the
-      # specific pseudoinverse C^{-1} determines the error. Hence, we require
-      # the user to specify the C^{-1} explicitly and pass that in instead.
-      checks.check_square(C, 'strategy_matrix')
+    # We require square C, because for a non-square C, the choice of the
+    # specific pseudoinverse C^{-1} determines the error. Hence, we require
+    # the user to specify the C^{-1} explicitly and pass that in instead.
+    checks.check_square(C, 'strategy_matrix')
     n = C.shape[1]
     A = workload_matrix if workload_matrix is not None else jnp.tri(n)
     # Solve B @ C = A for B

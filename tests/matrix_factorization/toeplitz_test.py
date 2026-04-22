@@ -378,15 +378,70 @@ class ToeplitzTest(parameterized.TestCase):
         rtol=1e-10,
     )
 
-  def test_sensitivity_squared_bad_input(self):
-    with self.assertRaisesRegex(ValueError, 'coef must be non-negative'):
-      toeplitz.minsep_sensitivity_squared(strategy_coef=[-1.0], min_sep=1)
-    with self.assertRaisesRegex(ValueError, 'coef must be non-increasing'):
-      toeplitz.minsep_sensitivity_squared(
-          strategy_coef=[1.0, 2.0, 1.0], min_sep=1
-      )
+  def test_sensitivity_squared_bad_min_sep(self):
     with self.assertRaisesRegex(ValueError, 'min_sep must be positive'):
       toeplitz.minsep_sensitivity_squared(strategy_coef=[1.0], min_sep=0)
+
+  @parameterized.product(
+      coef=[[-1.0], [1.0, 2.0, 1.0], [1.0, -0.5, 0.3], [-1, 0.5]],
+      min_sep=[1, 2],
+      max_part=[1, 2, None],
+  )
+  def test_sensitivity_squared_upper_bound(self, coef, min_sep, max_part):
+    """When coefs violate assumptions, the result is an upper bound."""
+    coef = jnp.array(coef)
+    n = 6
+    C = toeplitz.materialize_lower_triangular(coef, n=n)
+    true_sens_sq = (
+        sensitivity.get_min_sep_sensitivity_upper_bound(
+            C,
+            min_sep=min_sep,
+            max_participations=max_part,
+        )
+        ** 2
+    )
+    toeplitz_sens_sq = toeplitz.minsep_sensitivity_squared(
+        coef,
+        min_sep=min_sep,
+        max_participations=max_part,
+        n=n,
+    )
+    self.assertGreaterEqual(float(toeplitz_sens_sq), float(true_sens_sq) - 1e-6)
+
+  def test_sensitivity_squared_projection_is_majorant(self):
+    """Regression test: the projection must be a non-increasing majorant.
+
+    With coef = [1.0, 0.5, 0.8], the correct projection via
+    cummax(abs(coef)[::-1])[::-1] gives [1.0, 0.8, 0.8] (a majorant), ensuring
+    the result is an upper bound on true sensitivity. An incorrect projection
+    via cummin(abs(coef)) would give [1.0, 0.5, 0.5] (a minorant), which
+    underestimates the true sensitivity.
+    """
+    coef = jnp.array([1.0, 0.5, 0.8])
+    n = 6
+    C = toeplitz.materialize_lower_triangular(coef, n=n)
+    true_sens_sq = (
+        sensitivity.get_min_sep_sensitivity_upper_bound(
+            C,
+            min_sep=1,
+            max_participations=2,
+        )
+        ** 2
+    )
+    toeplitz_sens_sq = toeplitz.minsep_sensitivity_squared(
+        coef,
+        min_sep=1,
+        max_participations=2,
+        n=n,
+    )
+    # With the correct majorant projection, this is an upper bound.
+    self.assertGreaterEqual(float(toeplitz_sens_sq), float(true_sens_sq) - 1e-6)
+    # The correct projection strictly increases sensitivity relative to cummin.
+    # This ensures the test fails if cummax(abs[::-1])[::-1] is replaced with
+    # cummin(abs).
+    wrong_projection = jax.lax.cummin(jnp.abs(coef))
+    correct_projection = jax.lax.cummax(jnp.abs(coef)[::-1])[::-1]
+    self.assertFalse(jnp.allclose(wrong_projection, correct_projection))
 
 
 def _sensitivity_squared(coef: jnp.ndarray, n: int | None) -> jnp.ndarray:
@@ -418,7 +473,7 @@ class ToeplitzErrorTest(parameterized.TestCase):
       workload=st.sampled_from(
           ['default', 'prefix_sum', 'eye', 'banded', 'extra_entries']
       ),
-      config=st.sampled_from(['jit', 'skip_checks=True', 'skip_checks=False']),
+      config=st.sampled_from(['jit', 'eager']),
   )
   def test_per_query_error(self, name_coef_n_tuple, workload, config):
     _, coef, n = name_coef_n_tuple
@@ -438,21 +493,11 @@ class ToeplitzErrorTest(parameterized.TestCase):
 
     per_query_error = toeplitz.per_query_error
     if config == 'jit':
-      per_query_error = jax.jit(
-          per_query_error, static_argnames=['skip_checks', 'n']
-      )
-      skip_checks = True
-    elif config == 'skip_checks=True':
-      skip_checks = True
-    elif config == 'skip_checks=False':
-      skip_checks = False
-    else:
-      raise ValueError(f'Unknown config={config}')
+      per_query_error = jax.jit(per_query_error, static_argnames=['n'])
 
     inv_coef = toeplitz.inverse_coef(coef, n)
     expected = _per_query_error(coef, n, workload_coef=workload_coef)
     kwargs = {
-        'skip_checks': skip_checks,
         'workload_coef': workload_coef,
         'n': n,
     }

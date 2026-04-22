@@ -240,7 +240,6 @@ def multiply(
     lhs_coef: jax.Array,
     rhs_coef: jax.Array,
     n: int | None = None,
-    skip_checks: bool = False,
 ) -> jax.Array:
   """Computes the matrix product of two lower-triangular Toeplitz matrices.
 
@@ -254,21 +253,18 @@ def multiply(
       under the same conventions as `lhs_coef`.
     n: Optional, the size of the matrices L and R (see `coef` above). If None,
       the size of the matrices is equal to the number of coefficients.
-    skip_checks: If True, don't perform input verification. Setting `skip_checks
-      = True` is necessary when this function is jitted.
 
   Returns:
     The coefficients of the lower-triangular Toeplitz matrix L @ R where
     L = materialize_lower_triangular(lhs_coef, n) and
     R = materialize_lower_triangular(rhs_coef, n).
   """
-  if not skip_checks:
-    if n is None and len(lhs_coef) != len(rhs_coef):
-      raise ValueError(
-          'If n is not specified, then lhs_coef and rhs_coef must have the same'
-          ' length, but found lhs_coef of length'
-          f' {len(lhs_coef)=} and rhs_coef of length {len(rhs_coef)=}.'
-      )
+  if n is None and len(lhs_coef) != len(rhs_coef):
+    raise ValueError(
+        'If n is not specified, then lhs_coef and rhs_coef must have the same'
+        ' length, but found lhs_coef of length'
+        f' {len(lhs_coef)=} and rhs_coef of length {len(rhs_coef)=}.'
+    )
   lhs_coef, n = _reconcile(lhs_coef, n)
   rhs_coef, _ = _reconcile(rhs_coef, n)
   return jnp.convolve(
@@ -309,12 +305,17 @@ def minsep_sensitivity_squared(
     min_sep: int,
     max_participations: int | None = None,
     n: int | None = None,
-    skip_checks: bool = False,
 ) -> jax.Array:
   """Returns the sensitivity of the Toeplitz matrix.
 
   With max_participations = 1 (and any min_sep, say min_sep = 1), this is the
   same as single participation.
+
+  The result is exact (tight) when the Toeplitz coefficients are non-negative
+  and non-increasing. If the coefficients do not satisfy these assumptions, they
+  are projected onto the set of non-negative non-increasing sequences (via
+  absolute value and reverse cumulative max), and the result is an upper bound
+  on the true sensitivity.
 
   Reference: While this code actually predates the paper, this result is
   published in https://arxiv.org/pdf/2405.13763, Theorem 2.
@@ -334,37 +335,26 @@ def minsep_sensitivity_squared(
     max_participations: The maximum participation of a worst-case user.
     n: Optional, the size of the matrix C (see `coef` above). If None, the size
       of the matrix is equal to the number of coefficients.
-    skip_checks: If True, don't perform input verification which may not be
-      supported in jitted contexts.
 
   Returns:
-    The sensitivity squared.
+    The sensitivity squared. This is exact when `strategy_coef` is non-negative
+    and non-increasing, and an upper bound otherwise.
   """
   coef, n = _reconcile(strategy_coef, n)
 
-  # We may need to turn these off in jitted contexts:
-  if not skip_checks:
-    if not jnp.all(coef >= 0):
-      raise ValueError(
-          f'coef must be non-negative, but found minimum value {jnp.min(coef)},'
-          f' {coef[:25]=}'
-      )
-    if len(coef) > 1:
-      incr = coef[1:] - coef[:-1]
-      max_incr = jnp.max(incr)
-      if max_incr > 0:
-        raise ValueError(
-            f'coef must be non-increasing, but found increase {max_incr} at'
-            f' index {jnp.argmax(incr)}'
-        )
-    if not min_sep > 0:
-      raise ValueError('min_sep must be positive')
+  if not min_sep > 0:
+    raise ValueError('min_sep must be positive')
+
+  # Project onto non-negative non-increasing coefficients. This is a no-op
+  # when the coefficients already satisfy these assumptions, and yields an
+  # upper bound on sensitivity otherwise.
+  coef = jax.lax.cummax(jnp.abs(coef)[::-1])[::-1]
 
   k = sensitivity.minsep_true_max_participations(
       n=n, min_sep=min_sep, max_participations=max_participations
   )
-  # Because we assume the Toeplitz coefficients are positive and decreasing,
-  # the worst-case for sensitivity is (up to) k participations separated by
+  # When the Toeplitz coefficients are non-negative and non-increasing, the
+  # worst-case for sensitivity is (up to) k participations separated by
   # exactly b.  We use a difference of cumsums to do this in O(n) time.
 
   padding = (min_sep - n) % min_sep
@@ -382,7 +372,6 @@ def per_query_error(
     noising_coef: jax.Array | None = None,
     n: int | None = None,
     workload_coef: jax.Array | None = None,
-    skip_checks: bool = False,
 ) -> jax.Array:
   """Expected per-query squared error for a (banded) Toeplitz mechanism.
 
@@ -403,15 +392,12 @@ def per_query_error(
       vector of 1s, corresponding to the prefix matrix. If this is longer than
       `n`, the extra entries are ignored (even if `n` is inferred from the
       length of the `strategy_coef` or `noising_coef`).
-    skip_checks: If True, don't perform input verification. It may be necessary
-      to set skip_checks=True when this function is jitted.
 
   Returns:
     The expected per-query squared error, an array of length n.
   """
-  if not skip_checks:
-    if (strategy_coef is None) == (noising_coef is None):
-      raise ValueError('Specify exactly one of strategy_coef or noising_coef.')
+  if (strategy_coef is None) == (noising_coef is None):
+    raise ValueError('Specify exactly one of strategy_coef or noising_coef.')
 
   if strategy_coef is not None:
     strategy_coef, n = _reconcile(strategy_coef, n)
@@ -428,9 +414,7 @@ def per_query_error(
       # This is more efficient than explicitly multiplying by the prefix matrix.
       B_coef = jnp.cumsum(noising_coef)
     else:
-      B_coef = multiply(
-          workload_coef, noising_coef, n=n, skip_checks=skip_checks
-      )
+      B_coef = multiply(workload_coef, noising_coef, n=n)
 
   return jnp.cumsum(B_coef**2)
 
@@ -823,13 +807,11 @@ def compute_banded_inverse_sensitivity_squared(
   strategy_coef = inverse_coef(noising_coef, n)
 
   if not use_matrix_upper_bound:
-    coef_for_upper_bound = jax.lax.cummax(jnp.abs(strategy_coef)[::-1])[::-1]
     return minsep_sensitivity_squared(
-        coef_for_upper_bound,
+        strategy_coef,
         min_sep=min_sep,
         max_participations=max_participations,
         n=n,
-        skip_checks=True,
     )
 
   strategy_matrix = materialize_lower_triangular(jnp.abs(strategy_coef), n)
@@ -901,7 +883,6 @@ def optimize_banded_inverse_toeplitz(
             noising_coef=coef,
             n=n,
             workload_coef=workload_coef,
-            skip_checks=False,
         )
     )
     sens_squared = compute_banded_inverse_sensitivity_squared(

@@ -158,6 +158,11 @@ class DenseTest(parameterized.TestCase):
         err_msg='Failure computing per_query error for noising_matrix',
     )
 
+    with self.assertRaisesRegex(ValueError, 'exactly one of'):
+      per_query_error(
+          strategy_matrix=test_case.C, noising_matrix=test_case.C_inv, **kwargs
+      )
+
   # pylint:disable=bad-whitespace
   # fmt:off
   @parameterized.named_parameters(

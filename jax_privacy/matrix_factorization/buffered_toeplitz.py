@@ -659,7 +659,6 @@ class LossFn:
           strategy_coef=blt.toeplitz_coefs(n),
           min_sep=min_sep,
           max_participations=max_participations,
-          skip_checks=True,
       )
 
     return cls(
@@ -813,8 +812,6 @@ class LossFn:
       )
       return jnp.inf
     error = self.error_for_inv(inv_blt)
-    if not skip_checks and self.max_participations > 1:
-      _assert_blt_valid_for_minsep(blt, n=self.n)
     sens_squared = self.sensitivity_squared(blt)
     return error * sens_squared
 
@@ -929,32 +926,6 @@ def get_init_blt(
   return init_blt
 
 
-def _assert_blt_valid_for_minsep(blt: BufferedToeplitz, n: int = 10000):
-  """Checks that the BLT has valid min-sep sensitivity."""
-  # It is possible though unlikely that optimization produces
-  # a BLT with increasing Toeplitz coefficients, which invalidates
-  # the min-sep sensitivity calculation implemented in
-  # `toeplitz.minsep_sensitivity_squared`. Hence,
-  # we re-check sensitivity here with checks enabled just in case.
-  try:
-    sens_squared = toeplitz.minsep_sensitivity_squared(
-        blt.toeplitz_coefs(n),
-        min_sep=1,
-        max_participations=1,
-        skip_checks=False,
-    )
-  except ValueError as e:
-    raise RuntimeError(f'Error computing sensitivity for BLT\n{blt}') from e
-  # The above should raise a ValueError if Toeplitz coefficients are
-  # increasing. Since C[0, 0] = 1 for a BLT, the sensitivity should be
-  # at least one, and it should be finite:
-  if not (jnp.isfinite(sens_squared) and sens_squared >= 1):
-    raise RuntimeError(
-        'Optimized BLT does not satisfy min-sep sensitivity, this should not'
-        f' happen: {sens_squared=} for BLT\n{blt}'
-    )
-
-
 @optimization.jax_enable_x64
 def optimize_loss(
     loss_fn: LossFn,
@@ -1029,9 +1000,6 @@ def optimize_loss(
     raise RuntimeError(
         f'Optimization produced BLT with non-finite loss {loss}:\n{blt}'
     )
-
-  if loss_fn.max_participations > 1:
-    _assert_blt_valid_for_minsep(blt, n=loss_fn.n)
 
   if jnp.any(jnp.abs(blt.output_scale) < 1e-8):
     logging.warning(
