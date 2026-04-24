@@ -44,6 +44,8 @@ transformations, via optax.chain(privatizer, optimizer). These transformed
 privatizers enjoy the same privacy properties by the post-processing property.
 """
 
+from __future__ import annotations
+
 import enum
 import functools
 from typing import NamedTuple, Protocol

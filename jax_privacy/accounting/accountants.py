@@ -14,6 +14,8 @@
 
 """Compute bounds on DP epsilon (given delta) for DP-SGD."""
 
+from __future__ import annotations
+
 import abc
 from collections.abc import Sequence
 import dataclasses

@@ -14,6 +14,8 @@
 
 """Utilities for clipping function outputs and aggregating across a batch."""
 
+from __future__ import annotations
+
 import collections
 from collections.abc import Sequence
 import dataclasses

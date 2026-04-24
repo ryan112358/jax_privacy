@@ -18,6 +18,8 @@
 for error and sensitity calculation, as well as optimization.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 import dataclasses
 import functools

@@ -52,6 +52,8 @@ although more will become available in the future when we feel the API has
 stabilized.
 """
 
+from __future__ import annotations
+
 import copy
 import dataclasses
 import functools

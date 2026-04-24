@@ -14,6 +14,8 @@
 
 """Simple wrapper around optax to be used for strategy optimization."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 import dataclasses
 from typing import Any, TypeAlias, TypeVar

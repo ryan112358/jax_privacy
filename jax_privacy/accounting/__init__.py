@@ -14,6 +14,8 @@
 
 """Privacy accounting."""
 
+from __future__ import annotations
+
 from jax_privacy.accounting.accountants import DpAccountantConfig
 from jax_privacy.accounting.accountants import PldAccountantConfig
 from jax_privacy.accounting.accountants import RdpAccountantConfig

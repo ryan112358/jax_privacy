@@ -25,6 +25,8 @@ not catastrophic failures. Roughly speaking, the floating point errors in
 computing the probabilities are added to the delta term in differential privacy.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 

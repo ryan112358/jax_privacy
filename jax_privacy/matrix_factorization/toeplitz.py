@@ -20,6 +20,8 @@ of the `n` Toeplitz coefficients, and hence can be much more efficient than
 doing the calculations on the materialized `n**2` matrices.
 """
 
+from __future__ import annotations
+
 import concurrent
 import dataclasses
 import functools
