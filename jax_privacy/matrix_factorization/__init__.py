@@ -18,6 +18,8 @@ For a good introductory overview of the matrix factorization API and usages,
 see jax_privacy/examples/dpmf_strategy_optimization.py.
 """
 
+from __future__ import annotations
+
 from . import banded
 from . import buffered_toeplitz
 from . import dense

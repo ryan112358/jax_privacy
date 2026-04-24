@@ -14,6 +14,8 @@
 
 """Class and instances for expressing and optimizing banded strategies."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 import functools
 from typing import Any

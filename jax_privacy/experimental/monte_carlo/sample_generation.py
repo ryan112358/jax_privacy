@@ -28,6 +28,8 @@ generally not compatible with truncation due to the need for the dataset size to
 be public.
 """
 
+from __future__ import annotations
+
 from jax_privacy import batch_selection
 import numpy as np
 import scipy as sp

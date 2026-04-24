@@ -17,6 +17,8 @@
 See `sensitivity.py` for sensitivity calculations for dense strategies.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 
 import jax

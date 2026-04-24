@@ -14,6 +14,8 @@
 
 """Utilities for confirming various sybmols are used correctly."""
 
+from __future__ import annotations
+
 from typing import Optional
 import jax
 import jax.numpy as jnp

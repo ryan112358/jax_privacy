@@ -14,6 +14,8 @@
 
 """Library for computing sensitivity under multiple participations."""
 
+from __future__ import annotations
+
 import functools
 from typing import Optional
 

@@ -52,6 +52,8 @@ References:
 [3] https://arxiv.org/abs/2306.08153
 """
 
+from __future__ import annotations
+
 import abc
 import dataclasses
 import enum

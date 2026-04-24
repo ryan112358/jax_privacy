@@ -41,6 +41,8 @@ Example Usage:
    private_model.get_noise_multiplier()
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 import dataclasses
 import functools

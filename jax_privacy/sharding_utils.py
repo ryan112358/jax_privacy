@@ -28,6 +28,8 @@ Differentially Private ML](https://arxiv.org/abs/2405.15913) and in
 (https://arxiv.org/abs/2506.08201).
 """
 
+from __future__ import annotations
+
 import math
 from typing import Any, Callable, TypeAlias
 

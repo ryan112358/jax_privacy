@@ -14,6 +14,8 @@
 
 """Experimental utilities for handling variable batch sizes."""
 
+from __future__ import annotations
+
 import functools
 
 import numpy as np

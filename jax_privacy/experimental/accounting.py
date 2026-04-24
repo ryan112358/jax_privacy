@@ -49,6 +49,8 @@ Example Usage (Calibrating Number of Iterations for DP-SGD):
   155
 """
 
+from __future__ import annotations
+
 import math
 
 import dp_accounting
